@@ -472,79 +472,126 @@ Using this information, I will build my model with Mortality Rate as a constant.
 
 ## The math behind predictions
 
-To start, we know a few things about our rates.
+To start, there are a few things to note about how I built this algorithm:
+
+* Only the bottom quarter of the data is being assessed for its changes in rates.
+    + This is so that we can get an accurate start to our model, we also want to keep the range of possible change in rates lower, as to follow the trend of the predicted line.
+
+* Once we predict a future rate, we throw away the oldest rate and re-model our predictions!
+    + This is to make sure that our model changes in accordance with our predictions, otherwise we would start to see a more linear aspect to our predictions.
+    
+* I have split this algorithm into multiple functions to stop at certain points, in order to explain whats going on.
+
+Lets dive in by taking a look at how our rates of change work!
+
+# Prediction Analysis and building
+
+To start, we know how much our Deaths are changing per day, we can formulate what percentage this change is from our cumulative Deaths. To do this, we need the following formula:
+
+$ ROC = \frac{Deaths - Deaths_1}{Deaths_1} $
+
+In plain terms, this formula takes the change per day of our deaths, and divides that by our previous days cumulative Deaths! Making the deaths per day into a percentage of our cumulative deaths!
 
 ```{r}
+split_to_country <- function(data, country){
+  #take data and split by country
+  #first function for model
+  country_data <- data %>% 
+    subset(Country == country) %>% #getting italy
+    convert() %>% #function converts to wide format
+    subset(select = c(Country, Date, Deaths, Confirmed)) %>% 
+    mutate( #adding columns for per day change, and rate per day
+    Deaths_Per_Day =  Deaths - lag(Deaths, k=1),
+    Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
+    Mortality_Rate = Deaths/Confirmed
+      )
+
+  #cleaning data for further analysis
+  country_data <- country_data %>% 
+    subset(select = c(Date, Deaths, Deaths_Per_Day, Deaths_Rate_Change)) %>% 
+    subset(!is.na(Deaths_Per_Day)) %>% 
+    mutate(
+      Deaths_PD = Deaths_Per_Day,
+      Deaths_RC = Deaths_Rate_Change
+    ) %>% 
+    subset(select = c(Date, Deaths, Deaths_PD, Deaths_RC))
+  return (country_data)
+}
+
 italy <- raw %>% 
-  subset(Country == "Italy") %>% #getting italy
-  convert() %>% #function converts to wide format
-  subset(select = c(Country, Date, Deaths, Confirmed)) %>% 
-  mutate( #adding columns for per day change, and rate per day
-  Deaths_Per_Day =  Deaths - lag(Deaths, k=1),
-  Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
-  Mortality_Rate = Deaths/Confirmed
+  split_to_country("Italy")
+#showing tail values
+tail(italy,5)
+```
+
+Now that this step is complete, we can calculate the change in our death rate of change. Essentially looking at how much our rates are fluctiating over time. We can do this simply by taking our first deaths rate of change and subtracting the second days rate of change from that. This will mean if our rate goes up, our change will go up aswell!
+
+```{r}
+get_dr_c <- function(data){
+  #Calulating the change in our rates of change
+  data <- data %>% 
+    mutate(
+      D_RC_C = Deaths_RC - lag(Deaths_RC,k=1)
     )
+  return (data)
+}
 
+italy <- italy %>% 
+  get_dr_c()
 
-test <- italy %>% 
-  subset(select = c(Date, Deaths, Deaths_Per_Day, Deaths_Rate_Change)) %>% 
-  subset(!is.na(Deaths_Per_Day)) %>% 
-  mutate(
-    Deaths_PD = Deaths_Per_Day,
-    Deaths_RC = Deaths_Rate_Change
-  ) %>% 
-  subset(select = c(Date, Deaths, Deaths_PD, Deaths_RC))
-
-tail(test,5)
+tail(italy,5)
 ```
-To start, we know how much our Deaths will change, however to build an accurate predictor, I want to use the probability of our rate changing, as this is will be the more accurate solution, to do this we need to find the change in our Rates
+
+Great, here are Italys' cumulative Deaths, Deaths per day, Deaths rate of change, and the change in the rate of change. We will use all this information to work backwards at the end, to fill in our predictions.
 
 ```{r}
-test <- test %>% 
-  mutate(
-    D_RC_C = Deaths_RC - lag(Deaths_RC,k=1)
-  )
+##save og data!
+og <- italy
 
-tail(test,5)
-```
-lets take a look at the desnity of these new numbers, first I will get rid of the outliers.
+split_for_graph <- function(data, split){
+  data <- data %>% 
+    subset(!is.na(D_RC_C))
+  
+  #take only the bottom quarter
+  data <- data[ceiling(nrow(data)-(split-1)) : nrow(data),]
+  
+  mu = data %>% 
+    subset(select = Deaths_PD) %>% 
+    as.matrix() %>% 
+    mean()
+  
+  sd = data %>% 
+    subset(select = Deaths_PD) %>% 
+    as.matrix() %>% 
+    sd()
+  
+  #getting rid of outliers in the deaths per day
+  data <- data %>% 
+    subset(mu-sd*3 < Deaths_PD & Deaths_PD < mu+sd*3)
+  
+  mu <- data %>% 
+    subset(select = D_RC_C) %>% 
+    as.matrix() %>% 
+    mean()
+  
+  sd <- data %>% 
+    subset(select = D_RC_C) %>% 
+    as.matrix() %>% 
+    sd()
+  
+  #getting rid of outliers in the change of the rate of change in deaths
+  data <- data %>% 
+    subset(mu-sd*3 < D_RC_C & D_RC_C < mu+sd*3)
+  
+  return (data)
+}
 
-```{r}
-test <- test %>% 
-  subset(!is.na(D_RC_C))
-test <- test[ceiling(nrow(test)/4) : nrow(test),]
-
-mu = test %>% 
-  subset(select = Deaths_PD) %>% 
-  as.matrix() %>% 
-  mean()
-
-sd = test %>% 
-  subset(select = Deaths_PD) %>% 
-  as.matrix() %>% 
-  sd()
-
-#getting rid of outliers in the deaths per day
-test <- test %>% 
-  subset(mu-sd*3 < Deaths_PD & Deaths_PD < mu+sd*3)
-
-mu <- test %>% 
-  subset(select = D_RC_C) %>% 
-  as.matrix() %>% 
-  mean()
-
-sd <- test %>% 
-  subset(select = D_RC_C) %>% 
-  as.matrix() %>% 
-  sd()
-
-#getting rid of outliers in the change of the rate of change in deaths
-test <- test %>% 
-  subset(mu-sd*3 < D_RC_C & D_RC_C < mu+sd*3)
+italy <- italy %>% 
+  split_for_graph(8)
 ```
 
 ```{r}
-hchart(density(test$D_RC_C), type = "area", color = "red", name = "Rate of Deaths") %>%
+hchart(density(italy$D_RC_C), type = "area", color = "red", name = "Rate of Deaths") %>%
   hc_add_theme(hc_theme_flat()) %>% 
   hc_title(text = "Distribion of the Change in Rate of Change",
            align = "left") %>% 
@@ -553,333 +600,179 @@ hchart(density(test$D_RC_C), type = "area", color = "red", name = "Rate of Death
   hc_yAxis(labels = list(format = "{value}")) %>% 
   hc_xAxis(labels = list(format = "{value}"),
            title = list(text = "Change in Rate of Change of Deaths"))%>% 
-  hc_legend(align = "left") %>% 
-  hc_exporting(enabled = TRUE,
-               filename = "it-dist-roc")
+  hc_legend(align = "left")
 ```
 
-This distribution appears normal, however lets test it anyways.
+This is the distribution of our rate of change, we want to take a look at this to make sure it is relatively normal, otherwise there will be a different method needed to make predictions from.
 
 ```{r}
-shapiro.test(test$D_RC_C)
+shapiro.test(italy$D_RC_C)
 ```
 
-Exactly what we wanted to see, our p value is > 0.05, meaning our distribution is normal enough to find the probabilities.
+Exactly what we wanted to see, our p value is > 0.05, meaning our distribution is normal enough to find the probabilities!
+
+## Building the predictions
+
+MATH
+    
+
 
 ```{r}
-days = 30
-set.seed(2354)
-pred <- rnorm(days, mu, sd)
-
-curr_d = max(test$Date)
-temp <- data.frame(Date = curr_d+1, Deaths = 0, Deaths_PD = 0, Deaths_RC = 0, D_RC_C = pred[1])
-
-for (i in 2:days){
-  temp1 <- data.frame(Date = curr_d+i, Deaths_PD = 0, Deaths_RC = 0, D_RC_C = pred[i])
-  
-  temp <- temp %>% 
-    bind_rows(temp1)
+### functions used inside function below
+get_rc <- function(death_rc_n1, change){
+  #rc = lag death_rc + change
+  rc=death_rc_n1+change
+  return(rc)
 }
-
+  
 get_pd <- function(deaths_n1, deaths_rc){
   #lag death*roc = pd
   pd = (deaths_rc*deaths_n1)
   return(ceiling(pd))
 }
-
-get_rc <- function(death_rc_n1, change){
-  #rc = lag death_rc + change
-  rc=death_rc_n1+change
-  return(ceiling(rc))
-}
-
-first_lag_death <- test %>% 
-  arrange(Date) %>% 
-  slice(n()) %>% 
-  subset(select=Deaths)
-
-first_lag_RC <- test %>% 
-  arrange(Date) %>% 
-  slice(n()) %>% 
-  subset(select=Deaths_RC)
-
+  
 get_death <- function(lag_death = lag_death, dpd){
+  #lag death + death per dat = next cumulative death
   death = lag_death+dpd
   return(ceiling(death))
 }
 
-
+### function used for prediction model
+prediction_model <- function(data, og_d, days, r_seed, country){
+  set.seed(r_seed)
+  
+  mu <- data %>% #grabbing first mean
+    subset(select = D_RC_C) %>% 
+    as.matrix() %>% 
+    mean()
+  
+  sd <- data %>% #grabbing firs standard deviation
+    subset(select = D_RC_C) %>% 
+    as.matrix() %>% 
+    sd()
+    
+  pred <- rnorm(1, mu, sd) #getting a random prediction
+  
+  temp <- data
+  
+  
+  for (i in 1:days){ #loop for the days we want
+    curr_d = max(temp[temp$D_RC_C != 0,"Date"])
+    
+    temp <- temp %>% #adding our prediction, taking off the top value
+      bind_rows(data.frame(Date = curr_d+1, Deaths = 0, Deaths_PD = 0, Deaths_RC = 0, D_RC_C = pred[1])) %>% 
+      slice(-1)
+    
+    data <- temp %>% #adding our prediction to the overall data
+      bind_rows(data.frame(Date = curr_d+1, Deaths = 0, Deaths_PD = 0, Deaths_RC = 0, D_RC_C = pred[1])) %>% 
+      slice(1) %>% 
+      bind_rows(data)
+  
+    mu <- data %>% #grabbing the new mean
+    subset(select = D_RC_C) %>% 
+    as.matrix() %>% 
+    mean()
+  
+    sd <- data %>% #grabbing the new standard deviation
+    subset(select = D_RC_C) %>% 
+    as.matrix() %>% 
+    sd()
+  
+    pred <- rnorm(1, mu, sd) #grabbing the new prediction!
+  } #repeat
+  
+  data <- data %>% #combining our data back to our real data
+    slice(-1) %>% 
+    bind_rows(og_d) %>% 
+    arrange(Date)
+  
+  data <- data[!duplicated(data$Date), ] #ended up with duplicates, lets get rid of those
+     
+  #taking the last row where our deaths aren't 0
+  temp <- data %>% 
+    subset(Deaths != 0) %>% 
+    slice(n())
    
-####CHECK FORMULAS AND MATH
-test12 <- test %>% 
-  arrange(Date) %>% 
-  slice(n()) %>% 
-  bind_rows(temp)
- 
- for (i in 2:nrow(test12)){
-   test12[i,4] <-test12[i-1,4] + test12[i,5]
-    #test12[i,"Deaths_PD"] = get_pd(test12[i-1,"Deaths"], test12[i,"Deaths_RC"])
-    #test12[i,"Deaths"] = get_death(test12[i-1,"Deaths"], test12[i,"Deaths_PD"])
+  # adding that row to our data
+  temp <- data %>% 
+    subset(Deaths == 0) %>% 
+    bind_rows(temp) %>% 
+    arrange(Date)
   
- }   
-
-    
-%>%     
-    
- %>%
-  mutate(
-    Deaths_RC = get_rc(death_rc_n1 = lag(Deaths_RC, k=1), change = D_RC_C)
-  )    
-    
-,
-    Deaths_PD = get_pd(lag(Deaths, k=1), Deaths_RC),
-    Deaths = get_death(lag_death =na_if(lag(Deaths, k=1),first_lag_death), Deaths_PD)
-  ) 
-
-%>% 
   
-  slice(2:n())#
-#Deaths_Per_Day =  Deaths - lag(Deaths, k=1),
-#Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
-```
+  #Here is where I get our values based on our predictions!
+  for (i in 2:nrow(temp)){
+     #getting roc
+      temp[i,4] <- get_rc(temp[i-1,4], temp[i,5])
+      
+      #getting deaths per day
+      temp[i,3] <- get_pd(temp[i-1,2], temp[i,4])
+      
+      #getting cumulative deaths
+      temp[i,2] <- get_death(temp[i-1,2], temp[i,3])
+  }
+  
+  
+  #Here is where we need to fix our data, we ended up getting negative deaths per day after a certain time, and this started making out cumulative deaths decrease. This is intended, as we need these deaths per day values, but we need to swap it back to negative!
+  
+  #Another thing to note, is I changed the cumulative deaths to match our decreasing deaths per day, essentially this fixes our model to reflect the real world, as people cannot become undead!
+  bool = 1
+  for (i in 2:nrow(temp)){
+    
+    if (temp[i,3] < 0){
+        temp[i,3] <- temp[i,3]*-1
+        temp[i,2] <- temp[i-1,2] + (2*temp[i,3]) #adjust from previous calculations using negative numbers
+    }
+    else{
+      temp[i,2] <- temp[i-1,2] + temp[i,3] #recalculate, this is incase if bounces beteween negative and positive
+    }
+  }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Building the infected cases
-
-First, I want to show why our mortality rate must be accurate to get the total number of infected.
-
-```{r}
-#Variable for deleting left over data variables
-to_delete <- c("corr", "p", "p_a", "p_c", "p_d", "plot_data", "r", "std_corr", "total", "ts")
-
-#removing old variables
-rm(list = to_delete)
-
-italy <- raw %>% 
-  subset(Country == "Italy") %>% #getting italy
-  convert() %>% #function converts to wide format
-  subset(select = c(Country, Date, Deaths, Confirmed)) %>% 
-  mutate( #adding columns for per day change, and rate per day
-  Deaths_Per_Day =  Deaths - lag(Deaths, k=1),
-  Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
-  Mortality_Rate = Deaths/Confirmed
+ temp <- temp %>% 
+    mutate(
+      Country = country
     )
+  
+  return (temp)
+}
 
-mr_mu <- italy %>% #getting our mean mortality rate
-  subset(select = Mortality_Rate) %>% 
-  subset(!is.na(Mortality_Rate)) %>% 
-  as.matrix() %>% 
-  mean()
+italy <- italy %>% 
+  prediction_model(og_d = og, days = 100, r_seed = 23, country = "Italy")
 
-mr_sd <- italy %>% #getting our mean mortality rate
-  subset(select = Mortality_Rate) %>% 
-  subset(!is.na(Mortality_Rate)) %>% 
-  as.matrix() %>% 
-  sd()
+og <- og %>% 
+  mutate(
+    Country = "Italy"
+  )
 ```
 
-## Getting an accurate mortality rate
-
-What I did:
-* Grabbed confirmed cases and Deceased Cases for each date
-* Calculated the Deaths per day, aswell as that rate of change
-* Calculated the rough Mortality rate with the formula below
-
-$ {Mortality Rate} =  \frac{Deaths}{Infected} $
-
-
-Meaning, if we divide our cumulative Deaths by our cumulative Confirmed cases from 13 days prior. We should get a better estimate to our Mortality Rate. We can use this to estimate the actual cases per day, but first lets look at these Mortality Rates and get our average.
+## Taking a look at our predicted Deaths
 
 ```{r}
-data <- italy %>% 
-  subset(!is.na(Mortality_Rate)) %>% 
-  subset(mr_mu-mr_sd*3 < Mortality_Rate & Mortality_Rate < mr_mu+mr_sd*3) #removing outliers
+pred_italy <- italy %>% 
+  subset(Deaths_PD != 0) %>% 
+  slice(-n()) %>% 
+  arrange(Date) %>%
+  slice(-1) %>% 
+  bind_rows(og) %>% 
+  arrange(Date) %>% 
+  subset(select = c(Country, Date, Deaths, Deaths_PD, Deaths_RC, D_RC_C))
 
-hchart(density(data$Mortality_Rate), type = "area", color = "red", name = "Mortality Rate") %>%
+pred_italy %>% 
+  hchart(type = "line", hcaes(x=Date, y=Deaths), color = "red", name = "Total Deaths") %>% 
   hc_add_theme(hc_theme_flat()) %>% 
-  hc_title(text = "Italys' Distribion of the Mortality Rate, per Day",
+  hc_title(text = "Italys' projected Deaths",
            align = "left") %>% 
-  hc_subtitle(text = "",
+  hc_subtitle(text = "Using my prediction model",
               align = "left") %>% 
-  hc_yAxis(labels = list(format = "{value}")) %>% 
-  hc_xAxis(labels = list(format = "{value}"),
-           title = list(text = "Mortality Rate"))%>% 
+  hc_yAxis(labels = list(format = "{value}"), title = list(text = "Cumulative Number of Deaths")) %>% 
+  hc_xAxis(title = list(text = "Date"),
+           plotBands = list(
+             list(
+               label = list(text = "This is the Predicted Data"),
+               color = "lightblue",
+               from = datetime_to_timestamp(as.Date('2020-03-24')),
+               to = datetime_to_timestamp(as.Date('2020-06-02'))
+             )))%>% 
   hc_legend(align = "left")
 ```
 
-The above graph shows the distribution of the mortality rates, Visually this distribution does not appear to be normal, however lets test that using the Shapiro-Wilk test.
-
-```{r}
-shapiro.test(data$Mortality_Rate) #checking without outliers
-
-cat("The mean Mortality Rate is: ", mr_mu)
-```
-Since our p value < 0.05, we can safely say that our mortality Rate is not a normal distribution.
-
-Despite this, we can estimate the amount of cases per day, however I will build models for Italys' mean mortality rate, Italys' changing mortality rate, and the global mortality rate.
-
-```{r}
-gl_mu <- raw %>% #getting mean global rate
-  subset(Country == "Global") %>%
-  convert() %>% 
-  mutate(
-    Mortality_Rate = Deaths/Confirmed
-  ) %>% 
-  subset(select = Mortality_Rate) %>% 
-  as.matrix() %>% 
-  mean()
-
-data <- raw %>% #getting data for plot
-  subset(Country == "Global") %>%
-  convert() %>% 
-  mutate(
-    Mortality_Rate = Deaths/Confirmed
-  ) %>% 
-  subset(select = Mortality_Rate)
-
-hchart(density(data$Mortality_Rate),type = "area", color = "red", name = "Mortality Rate") %>% 
-  hc_add_theme(hc_theme_flat()) %>% 
-  hc_title(text = "Global Distribion of the Mortality Rate, per Day",
-           align = "left") %>% 
-  hc_subtitle(text = "",
-              align = "left") %>% 
-  hc_yAxis(labels = list(format = "{value}")) %>% 
-  hc_xAxis(labels = list(format = "{value}"),
-           title = list(text = "Mortality Rate"))%>% 
-  hc_legend(align = "left")
-```
-This is our Global distribution of our Mortality Rates, per day. Again, this distribution is not normal, however lets do a Shapiro-Wilk test to be safe.
-
-```{r}
-shapiro.test(data$Mortality_Rate)
-
-cat("The mean Mortality Rate is: ", gl_mu)
-```
-As expected, this p value is < 0.05, meaning the data is not distributed normally. However we do have a mean Mortality Rate of which we can use to build our model, along with our other options.
-
-## Getting the Infections per day
-
-There are a few things I should not before moving forward. Without any studies on the subject, estimates of the Mortality Rate are likely to be wrong. This is due to the fact that our confirmed infection numbers are innacurate. However, we can still esitmate what the Mortality rate might be, and build models from there.
-
-
-$ infections_1/day = \frac{Deaths/day}{MortalityRate} $
-
-$ s.t. infections_1 = infections/day -23days $
-
-Keep in mind, this will give us the amount of new infections on the date 23 days before our deaths/day value.
-
-We can then use the cases per day to find out actual amount of cumulative cases by summing them up!
-
-
-```{r}
-calc_w_mu <- function(country, mu){
-  new <- country %>% 
-    mutate(
-      infections_pd = ceiling(lead(Deaths_PD, 23)/mu),
-      ) %>% 
-    subset(select = c(Country, Date, infections_pd, Deaths, Deaths_PD, Deaths_Rate_Change))
-  
-  return (new)
-}
-
-#ceiling(lead(Deaths_Per_Day, 23)/lead(Mortality_Rate, 23))
-
-getInfections <- function(data, country, mean){
-  data <- data %>% 
-    subset(Country == country) %>% #getting country
-    convert() %>% #function converts to wide format
-    subset(select = c(Country, Date, Deaths, Confirmed)) 
-  
-  data <- data %>% #set NA deaths to 0
-    subset(is.na(Deaths)) %>% 
-    mutate(
-      Deaths =0
-    ) %>% 
-    bind_rows(data) %>% 
-    subset(!is.na(Deaths))
-  
-  data <- data %>%
-    mutate( #adding columns for per day change, and rate per day
-      Deaths_PD =  Deaths - lag(Deaths, k=1),
-      Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
-    ) %>% 
-    calc_w_mu(mu = mean)#GETTING ESTIMATED INFECTIONS
-    
-  
-  data <- data %>% 
-    subset(is.nan(Deaths_Rate_Change)) %>% 
-    mutate(
-      Deaths_Rate_Change = 0
-    ) %>% 
-    bind_rows(data) %>% 
-    subset(!is.nan(Deaths_Rate_Change))
-  
-  data <- data %>% 
-    subset(is.infinite(Deaths_Rate_Change)) %>% 
-    mutate(
-      Deaths_Rate_Change = 0
-    ) %>% 
-    bind_rows(data) %>% 
-    subset(!is.infinite(Deaths_Rate_Change))
-  
-  data <- data[order(data$Date),]
-}
-```
-
-```{r}
-us_0.01 <- raw %>% 
-  getInfections(country = "US", mean = 0.01)
-```
-
-
-```{r}
-
-
-#low <- test %>% 
-#  subset(!is.na(Infections_PD_var), select = Infections_PD_var) %>% 
-#  as.matrix() %>% 
-#  sum() 
-
-
-```
-## Rough model
-
-Great, we got most of our days filled it, however we are missing 17 values of the closest dates. This is because we used the deaths from 17 back. We also have some unknown values in the beginning due to having no deaths, however those values wont matter too much for as it wont effect our totals too much.
-
-```{r}
-
-```
-As shown, we now have our per day Infections!
-
-* Infections_PD_mu was grabbed using Italys' static mean Mortality Rate
-* Infections_PD_gl was grabbed using the Global static mean Mortality Rate
-* Infections_PD_var was grabbed using Italys' Mortality rate per day
-
-As we can see, the estimated infections that ended up being the lowest ended up being Italys' static mean calculation!
-
-## Filling in the blanks
-
-Now that we have a start, we can use our Deaths Rate of Change as a predictor for the rest of our model! As shown earlier, the Deaths Rate of Change is statistically significant to be a predictor of our total Deaths.
-
-```{r}
-
-```
