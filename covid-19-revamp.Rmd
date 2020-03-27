@@ -49,9 +49,6 @@ library(ggplot2)
 library(plotly)
 library(highcharter)
 
-
-files <- list.files("raw", full.names = TRUE)
-
 #function for grabbing status from my filenames
 getStatus<- function(x){
   strsplit(x, "-")[[1]] %>%
@@ -66,6 +63,14 @@ createActive <- function(x){
     mutate(Active = Confirmed - (Deaths + Recovered)) %>% 
     melt(id = c("Country.Region", "Date"))
 }
+
+#function used to convert a dataset from long to wide
+convert <- function(x){ dcast(Country + Date ~ Status,
+        data=x, value.var="Value")}
+
+###########################################
+### This is where I start cleaning the data
+files <- list.files("raw", full.names = TRUE)
 
 raw <- files %>% #read in files
   lapply(function(x){
@@ -124,10 +129,12 @@ raw$Status <- as.character(raw$Status)
 total$Status <- as.character(total$Status)
 ```
 
-# Analysis
+Now that the data is clean, lets start digging into the data!
 
-Now that the data is clean, lets start by creating a few plots!
+# A Quick Analysis
 
+
+## Cumulative Total Cases
 ```{r}
 plot_data <- total %>% 
   subset(Country == "US" | Country == "China" | Country == "Italy" | Country == "Germany" | Country == "Spain" )
@@ -140,9 +147,9 @@ p <- ggplotly(p)
 p
 ```
 
-The above graph shows the variance of cases by type, and by country. We can see some pretty interesting things here. For example, Italy has the highest deaths and active cases, yet they are only second in the number of confirmed cases. This could mean two things:
+The above graph shows the variance of cumulative cases by type, and by country. We can see some pretty interesting things here. For example, Italy has the highest deaths and active cases, yet they are only second in the number of confirmed cases. This could mean a few things:
 
-* Italy may not have been testing enough people, which would bring their death-rate up.
+* Italy may not have been testing enough people, which would bring their Mortality Rate up.
 
 * Italys' healthcare system is getting overrun, and their deaths are about to skyrocket.
 
@@ -158,17 +165,23 @@ total %>%
            align = "left")
 ```
 
-# Rates of Change
+This graph perfectly shows just how many Deaths Italy has compared to our top 5 countries. At the time of writing this, Italy has just about doubled their death count over Chinas'!
+
+For the remainder of this analysis, I will be focusing on Italy.
+
+## Rates of Change
 
 Theres a couple things to keep in mind when looking at the rate of change.
 
 * It has more variance in the beginning.
 
-* As the number of cases get larger, the rate will tend to even out
+* As the number of cases get larger, the rate will tend to even out, or even decline.
+
+This is the basic Exponential growth function:
     
 **$f(x) = P_0(1+r)^d$**
    
-The rate is what gets exponentiated for an exponential function, ie, if our mean rate is higher, our confirmed cases will get exponentially higher with each day. Also, if the rate is negative that means we are starting to lose cases per day.
+The rate is what gets exponentiated for an exponential function, ie, if our mean rate is higher, our confirmed cases will get exponentially higher with each day. Also, if the rate is negative that means our cases per day has dropped from the previous days' number. If there starts to be a trend of negative rates, this means that the disease is starting to slow down, which could mean we are past the peak.
 
 ```{r}
 plot_data <- raw %>% 
@@ -201,9 +214,21 @@ hchart(density(p_a$Rate_Change), type = "area", color = "yellow", name = "Rate o
 
 This graph clearly shows that the deaths rate of change has not only a higher average, but most of the rates are higher than the rate of confirmed. This tells us the number of deaths are going up much faster than our confirmed cases are.
 
-This could be due to the fact that the Confirmed cases will always be lagging behind, or it could be due to the beginning of an overburdened healthcare system. It is also a possiblility that since our total Deaths are still low, we don't have enough data to get a good rate, and it is still in the beginning phase, where the rates tend to be higher.
+There are a multitude of reasons why this could happen:
 
-# Deeper look at Italys' Death Rate of Change
+* The Confirmed cases are lagging behind, due to the incubation period.
+
+* The Confirmed cases are innacurate, as finding this true value is difficult.
+
+* Our Mortality rate is not static
+  + This is a likely scenario for a few reasons.
+    - Healthcare systems can be overrun, causing more deaths.
+    - Population ages vary depending on location, and we know Covid-19 has a higher Mortality rate among an older population.
+
+* Rates tend to even out over time, meaning in the beginning stages the rate of change will be much higher than later on.
+  + If we have 1 person infected today, and another tomorrow, the rate of change from day 1 to day 2 is 2.0
+
+## Deeper look at Italys' Death Rate of Change
 
 ```{r}
 raw %>% 
@@ -230,9 +255,15 @@ raw %>%
    hc_legend(align = "left")
 ```
 
-Looking at this scatter plot, the number of Deceased cases rise, the Rate of Change trends downwards. This means that Italy has a negative correlation between the actual change in cases per day and the rate of change. This is a good thing, as it could mean a few things. Lets find out how well correlated the two actually are.
+Looking at this scatter plot, as the number of Deceased cases rise, the Rate of Change trends downwards. This means that Italy has a negative correlation between the actual change in cases per day and the rate of change. This is a good thing, as it could mean a few things:
 
-There are quite a few outliers in our data, so I will get the outliers out of our data
+* The infection rate is starting to slow down.
+* The rate of change is starting to average out to a lower number.
+
+Lets find out how well correlated the two actually are, using pearsons' method.
+
+
+Before we start, I will get the outliers out of the data, as some of the early rates are innacurate, for the reasons described before.
 
 ```{r}
 corr <- raw %>% #subsetting our data
@@ -258,7 +289,7 @@ std_corr <- corr %>%
   subset(Rate_Change <= 1) #we have a few outliers that need to go
 ```
 
-Before we start, lets check to see if our Rate of Change is relatively normal.
+First, lets check to see if our Rate of Change is relatively normal.
 
 ```{r}
 shapiro.test(std_corr$Rate_Change)
@@ -266,7 +297,7 @@ shapiro.test(std_corr$Rate_Change)
 
 This tells us that our p value is 0.1314 > 0.05
 
-This is great news! It means our data is normal, which makes the evaluation easier.
+This is great news! It means our data is normal, and this means that we can use our Rate of Deaths as a predictor for our model!
 
 ```{r}
 hchart(density(std_corr$Rate_Change), type = "area", color = "red", name = "Rate of Deaths") %>%
@@ -303,7 +334,11 @@ corr %>%
              dataLabels = list(enabled = TRUE)))
 ```
 
-As expected there is a negative correlation between the Rate of Change and Total cases, aswell as a negative correlation between our Rate of Change and the cases per day. This makes sense as the amount of cases increase, our rate actually starts decreasing. This is great news, as it means our rate is trending downwards, ultimately suggesting that the amount of deaths per day is slowing down.
+## Finding the significance of Italys' Rate of Deceased Cases
+
+As expected there is a negative correlation between the Rate of Change and Total cases, aswell as a negative correlation between our Rate of Change and the cases per day.
+
+This makes sense as the amount of cases increase, our rate should start having less variations. This is also great news, as it means our rate is trending downwards, ultimately suggesting that the rate of Deaths per day is slowing down.
 
 ```{r}
 corr %>% 
@@ -325,11 +360,12 @@ corr %>%
              dataLabels = list(enabled = TRUE)))
 ```
 
-The r squared value can tell us much more, for example, we know that 88.7% of our Cases per day can be explained by our Total cases! This also tells us that only 29.4% of our Cumulative cases can be explained by our Rate of Change.
+The r squared value can tell us much more, for example, we know that 88.7% of our Cases per day can be explained by our Total cases! This also tells us that 29.4% of our Cumulative cases can be explained by the variations in the Rate of Change.
 
 Let's check if these values are statistically significant, to do that we need the below formula to get our test statistic.
 
 ${ts} = \frac{r*\sqrt[2]{n-2}}{\sqrt[2]{1-r^2}}$
+
 ```{r}
 df = nrow(corr)-2 #our degree of freedom
 cv = qt(.975, df) #our test statistic
@@ -341,45 +377,295 @@ call_ts <- function(r, df){#function for getting the test statistic
     return (ts)
   }
 
-check_r <- function(r,ts){
-  if (r < -ts | r > ts){test = TRUE}
-  else {test = FALSE}
-  return(test)
-}
-
 #changing our matrix to be the test statistics
 ts <- call_ts(r, df)
 ts
 ```
+
 These are our test statistics for each r value, now we need to use the below formula to check if the r value is statistically significant.
 
 ${-ts} > r > ts$
 
-Now, lets test to see if these values are significant, or not. Here is a matrix of our r values.
+Here is a matrix of our r values.
 ```{r}
 r
 ```
 
-This tells us that our all our correlations are statistically significant! Which means that we can use all of our columns for a predictor of the other columns!
+This tells us that our all our correlations are statistically significant! Which means that we can use all of our factors as a predictor of the other.
 
-# Building a model of Italys' total Deaths
+I will be using the correlation between Italys' Deaths rate of change to predict our Deaths per day values, as this is a statistically significant correlation, and the math lines up.
 
-I want to first build a model of Italys' cumulative deaths, this can further help us find the actual number of confirmed cases!
+# Building a model of Italys' Deaths per day
+
+## Facts before the build
+
+There are two things I want to point out about Covid-19:
+
+* We know the median incubation period is 5 days.
+    + This means that there is most likely a 5 day lag in our confirmed cases, as 50% of infected individuals will not experience any symptoms before the incubation period.
+
+* We know the average days from illness onset to death is 18 days.
+    + This can help us estimate the amount of infections 23 days prior.
+    
+Using these two facts, we can estimate the average time from point of infection to death is 23 days (5 incubation days + 18 days till death). This means that if someone dies today from Covid-19 we can estimate that they got infected 23 days prior.
+    
+sources: 
+
+https://www.uptodate.com/contents/coronavirus-disease-2019-covid-19?source=history_widget
+
+https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(20)30566-3/fulltext
+
+I want to first build a model of Italys' predicted Deaths per day, this can further help us find the actual number of confirmed cases!
+
+## Building the predicted Deaths per day
 
 There are a few things I want to note:
 
-* The reported Deaths are likely to be the most accurate
+* The reported Deaths are likely to be the most accurate.
     + This is due to the fact that there are likely much more confirmed cases of Covid-19 than what is reported.
         - Covid-19 is known to be transmittable by people without showing symptoms.
         - Not everyone will be tested.
 
-* Using the Deaths rate of change, we can find a few things.
-    + We can estimate the future Deaths to be reported.
-    + We can estimate the number actual cases based on an estimated mortality rate for any given day.
+* Using the Deaths rate of change, we can estimate the future Deaths to be reported.
     
 So lets get started!
 
-First, lets fix the data to show us exactly what we need.
+### The math behind the model
+
+$ {Deaths} =  {Infected}*{MortalityRate} $
+
+This is our formula to find the number of Deaths from any given population of infected individuals. We are focusing on the Deaths per day, as I want a per day model.
+
+This means we need to take the derivative of our formula, with respect to time. This leads into a two options:
+
+* The Mortality Rate is a constant value for the population.
+
+* The mortality Rate is a value that also changes with time.
+
+$ D = Deaths, I = Infected, R = MortalityRate $
+
+If we take the derivative with Mortality Rate as a variable we get the following: 
+
+* $ \frac{dD}{dt} = \frac{dI}{dt}*\frac{dD}{dI} + \frac{dR}{dt}*\frac{dD}{dR} $
+
+* $ \frac{dD}{dt} = \frac{dI}{dt}*R + \frac{dR}{dt}*I $
+
+In plain terms, the change in Deaths is equal to the change in infections, time the Mortality Rate, plus, the change in Mortality Rate, times the infections.
+
+There is one major problem with this, we cannot make an accurate estimate on the Mortality Rate, which means we also cannot make an accurate estimate on the change in Mortality Rate. So, while this would be the better option, I do not believe it is feasable with the data we have now, as we cannot get an accurate Mortality Rate.
+
+
+However, taking the derivative with Mortality Rate as a constant gives us the following:
+
+* $ \frac{dD}{dt} = \frac{dI}{dt}*R $
+
+which also tells us..
+
+* $ \frac{dI}{dt} = \frac{\frac{dD}{dt}}{R}$
+
+In plain terms, we get that the change in Deaths is equal to the change in the infections, times the Mortality Rate. We also know that the change in infections is equal to the change in Deaths, divided by the Mortality Rate.
+
+This means that with a constant Mortality Rate, the change in Deaths will also be the same as the change in Infections! As the rate is just scaling the numbers. This tells us we can make predictions on the change in Infections using the change in Deaths, scaling with the Mortality Rate!
+
+
+Using this information, I will build my model with Mortality Rate as a constant.
+
+## The math behind predictions
+
+To start, we know a few things about our rates.
+
+```{r}
+italy <- raw %>% 
+  subset(Country == "Italy") %>% #getting italy
+  convert() %>% #function converts to wide format
+  subset(select = c(Country, Date, Deaths, Confirmed)) %>% 
+  mutate( #adding columns for per day change, and rate per day
+  Deaths_Per_Day =  Deaths - lag(Deaths, k=1),
+  Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
+  Mortality_Rate = Deaths/Confirmed
+    )
+
+
+test <- italy %>% 
+  subset(select = c(Date, Deaths, Deaths_Per_Day, Deaths_Rate_Change)) %>% 
+  subset(!is.na(Deaths_Per_Day)) %>% 
+  mutate(
+    Deaths_PD = Deaths_Per_Day,
+    Deaths_RC = Deaths_Rate_Change
+  ) %>% 
+  subset(select = c(Date, Deaths, Deaths_PD, Deaths_RC))
+
+tail(test,5)
+```
+To start, we know how much our Deaths will change, however to build an accurate predictor, I want to use the probability of our rate changing, as this is will be the more accurate solution, to do this we need to find the change in our Rates
+
+```{r}
+test <- test %>% 
+  mutate(
+    D_RC_C = Deaths_RC - lag(Deaths_RC,k=1)
+  )
+
+tail(test,5)
+```
+lets take a look at the desnity of these new numbers, first I will get rid of the outliers.
+
+```{r}
+test <- test %>% 
+  subset(!is.na(D_RC_C))
+test <- test[ceiling(nrow(test)/4) : nrow(test),]
+
+mu = test %>% 
+  subset(select = Deaths_PD) %>% 
+  as.matrix() %>% 
+  mean()
+
+sd = test %>% 
+  subset(select = Deaths_PD) %>% 
+  as.matrix() %>% 
+  sd()
+
+#getting rid of outliers in the deaths per day
+test <- test %>% 
+  subset(mu-sd*3 < Deaths_PD & Deaths_PD < mu+sd*3)
+
+mu <- test %>% 
+  subset(select = D_RC_C) %>% 
+  as.matrix() %>% 
+  mean()
+
+sd <- test %>% 
+  subset(select = D_RC_C) %>% 
+  as.matrix() %>% 
+  sd()
+
+#getting rid of outliers in the change of the rate of change in deaths
+test <- test %>% 
+  subset(mu-sd*3 < D_RC_C & D_RC_C < mu+sd*3)
+```
+
+```{r}
+hchart(density(test$D_RC_C), type = "area", color = "red", name = "Rate of Deaths") %>%
+  hc_add_theme(hc_theme_flat()) %>% 
+  hc_title(text = "Distribion of the Change in Rate of Change",
+           align = "left") %>% 
+  hc_subtitle(text = "For Italy",
+              align = "left") %>% 
+  hc_yAxis(labels = list(format = "{value}")) %>% 
+  hc_xAxis(labels = list(format = "{value}"),
+           title = list(text = "Change in Rate of Change of Deaths"))%>% 
+  hc_legend(align = "left") %>% 
+  hc_exporting(enabled = TRUE,
+               filename = "it-dist-roc")
+```
+
+This distribution appears normal, however lets test it anyways.
+
+```{r}
+shapiro.test(test$D_RC_C)
+```
+
+Exactly what we wanted to see, our p value is > 0.05, meaning our distribution is normal enough to find the probabilities.
+
+```{r}
+days = 30
+set.seed(2354)
+pred <- rnorm(days, mu, sd)
+
+curr_d = max(test$Date)
+temp <- data.frame(Date = curr_d+1, Deaths = 0, Deaths_PD = 0, Deaths_RC = 0, D_RC_C = pred[1])
+
+for (i in 2:days){
+  temp1 <- data.frame(Date = curr_d+i, Deaths_PD = 0, Deaths_RC = 0, D_RC_C = pred[i])
+  
+  temp <- temp %>% 
+    bind_rows(temp1)
+}
+
+get_pd <- function(deaths_n1, deaths_rc){
+  #lag death*roc = pd
+  pd = (deaths_rc*deaths_n1)
+  return(ceiling(pd))
+}
+
+get_rc <- function(death_rc_n1, change){
+  #rc = lag death_rc + change
+  rc=death_rc_n1+change
+  return(ceiling(rc))
+}
+
+first_lag_death <- test %>% 
+  arrange(Date) %>% 
+  slice(n()) %>% 
+  subset(select=Deaths)
+
+first_lag_RC <- test %>% 
+  arrange(Date) %>% 
+  slice(n()) %>% 
+  subset(select=Deaths_RC)
+
+get_death <- function(lag_death = lag_death, dpd){
+  death = lag_death+dpd
+  return(ceiling(death))
+}
+
+
+   
+####CHECK FORMULAS AND MATH
+test12 <- test %>% 
+  arrange(Date) %>% 
+  slice(n()) %>% 
+  bind_rows(temp)
+ 
+ for (i in 2:nrow(test12)){
+   test12[i,4] <-test12[i-1,4] + test12[i,5]
+    #test12[i,"Deaths_PD"] = get_pd(test12[i-1,"Deaths"], test12[i,"Deaths_RC"])
+    #test12[i,"Deaths"] = get_death(test12[i-1,"Deaths"], test12[i,"Deaths_PD"])
+  
+ }   
+
+    
+%>%     
+    
+ %>%
+  mutate(
+    Deaths_RC = get_rc(death_rc_n1 = lag(Deaths_RC, k=1), change = D_RC_C)
+  )    
+    
+,
+    Deaths_PD = get_pd(lag(Deaths, k=1), Deaths_RC),
+    Deaths = get_death(lag_death =na_if(lag(Deaths, k=1),first_lag_death), Deaths_PD)
+  ) 
+
+%>% 
+  
+  slice(2:n())#
+#Deaths_Per_Day =  Deaths - lag(Deaths, k=1),
+#Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Building the infected cases
+
+First, I want to show why our mortality rate must be accurate to get the total number of infected.
 
 ```{r}
 #Variable for deleting left over data variables
@@ -387,21 +673,14 @@ to_delete <- c("corr", "p", "p_a", "p_c", "p_d", "plot_data", "r", "std_corr", "
 
 #removing old variables
 rm(list = to_delete)
-```
-
-
-
-```{r}
-convert <- function(x){ dcast(Country + Date ~ Status,
-        data=x, value.var="Value")}
 
 italy <- raw %>% 
   subset(Country == "Italy") %>% #getting italy
-  convert() %>% 
-  subset(select = c(Date, Deaths, Confirmed)) %>% 
+  convert() %>% #function converts to wide format
+  subset(select = c(Country, Date, Deaths, Confirmed)) %>% 
   mutate( #adding columns for per day change, and rate per day
   Deaths_Per_Day =  Deaths - lag(Deaths, k=1),
-  Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1), 
+  Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
   Mortality_Rate = Deaths/Confirmed
     )
 
@@ -425,15 +704,15 @@ What I did:
 * Calculated the Deaths per day, aswell as that rate of change
 * Calculated the rough Mortality rate with the formula below
 
-$ {Mortality Rate} =  \frac{Deaths}{Confirmed} $
+$ {Mortality Rate} =  \frac{Deaths}{Infected} $
 
 
-Meaning, if we divide our cumulative Deaths by our cumulative Confirmed cases from 12 days prior. We should get a better estimate to our Mortality Rate. We can use this to estimate the actual cases per day, but first lets look at these Mortality Rates and get our average.
+Meaning, if we divide our cumulative Deaths by our cumulative Confirmed cases from 13 days prior. We should get a better estimate to our Mortality Rate. We can use this to estimate the actual cases per day, but first lets look at these Mortality Rates and get our average.
 
 ```{r}
 data <- italy %>% 
   subset(!is.na(Mortality_Rate)) %>% 
-  subset(mr_mu-mr_sd*3 > Mortality_Rate | Mortality_Rate < mr_mu+mr_sd*3) #removing outliers
+  subset(mr_mu-mr_sd*3 < Mortality_Rate & Mortality_Rate < mr_mu+mr_sd*3) #removing outliers
 
 hchart(density(data$Mortality_Rate), type = "area", color = "red", name = "Mortality Rate") %>%
   hc_add_theme(hc_theme_flat()) %>% 
@@ -497,54 +776,97 @@ cat("The mean Mortality Rate is: ", gl_mu)
 ```
 As expected, this p value is < 0.05, meaning the data is not distributed normally. However we do have a mean Mortality Rate of which we can use to build our model, along with our other options.
 
-There are two things I want to point out about Covid-19:
-
-* We know the median incubation period is 4 to 5 days.
-    + This means that there is most likely a 5 day lag in our confirmed cases, as 50% of infected individuals will not experience any symptoms before the incubation period.
-
-* We know the average days from contraction to death is 17 days.
-    + This can help us estimate the amount of infections 17 days prior.
-    
-sources: https://www.uptodate.com/contents/coronavirus-disease-2019-covid-19?source=history_widget
-
 ## Getting the Infections per day
+
+There are a few things I should not before moving forward. Without any studies on the subject, estimates of the Mortality Rate are likely to be wrong. This is due to the fact that our confirmed infection numbers are innacurate. However, we can still esitmate what the Mortality rate might be, and build models from there.
+
 
 $ infections_1/day = \frac{Deaths/day}{MortalityRate} $
 
-$ s.t. infections_1 = infections/day -17days $
+$ s.t. infections_1 = infections/day -23days $
 
-Keep in mind, this will give us the amount of new infections on the date 17 days before our deaths/day value.
+Keep in mind, this will give us the amount of new infections on the date 23 days before our deaths/day value.
 
 We can then use the cases per day to find out actual amount of cumulative cases by summing them up!
 
+
 ```{r}
+calc_w_mu <- function(country, mu){
+  new <- country %>% 
+    mutate(
+      infections_pd = ceiling(lead(Deaths_PD, 23)/mu),
+      ) %>% 
+    subset(select = c(Country, Date, infections_pd, Deaths, Deaths_PD, Deaths_Rate_Change))
+  
+  return (new)
+}
 
-test <- italy %>% #changing all NA values to 0
-  apply(MARGIN = c(1,2),FUN =function(x){
-    if (is.na(x)){x=0}
-    return (x)
-  }) %>% 
-  data.frame()
+#ceiling(lead(Deaths_Per_Day, 23)/lead(Mortality_Rate, 23))
 
-test <- italy %>% 
-  mutate(
-    Infections_PD_mu = ceiling(lead(Deaths_Per_Day, 17)/mr_mu),
-    Infections_PD_gl = ceiling(lead(Deaths_Per_Day, 17)/gl_mu),
-    Infections_PD_var = ceiling(lead(Deaths_Per_Day, 17)/lead(Mortality_Rate, 17))
-    )
-
-test <- test %>% 
-  subset(select = c(Date, Infections_PD_mu, Infections_PD_gl, Infections_PD_var, Deaths_Rate_Change))
+getInfections <- function(data, country, mean){
+  data <- data %>% 
+    subset(Country == country) %>% #getting country
+    convert() %>% #function converts to wide format
+    subset(select = c(Country, Date, Deaths, Confirmed)) 
+  
+  data <- data %>% #set NA deaths to 0
+    subset(is.na(Deaths)) %>% 
+    mutate(
+      Deaths =0
+    ) %>% 
+    bind_rows(data) %>% 
+    subset(!is.na(Deaths))
+  
+  data <- data %>%
+    mutate( #adding columns for per day change, and rate per day
+      Deaths_PD =  Deaths - lag(Deaths, k=1),
+      Deaths_Rate_Change =  (Deaths - lag(Deaths, k=1))/lag(Deaths, k=1),
+    ) %>% 
+    calc_w_mu(mu = mean)#GETTING ESTIMATED INFECTIONS
+    
+  
+  data <- data %>% 
+    subset(is.nan(Deaths_Rate_Change)) %>% 
+    mutate(
+      Deaths_Rate_Change = 0
+    ) %>% 
+    bind_rows(data) %>% 
+    subset(!is.nan(Deaths_Rate_Change))
+  
+  data <- data %>% 
+    subset(is.infinite(Deaths_Rate_Change)) %>% 
+    mutate(
+      Deaths_Rate_Change = 0
+    ) %>% 
+    bind_rows(data) %>% 
+    subset(!is.infinite(Deaths_Rate_Change))
+  
+  data <- data[order(data$Date),]
+}
 ```
 
+```{r}
+us_0.01 <- raw %>% 
+  getInfections(country = "US", mean = 0.01)
+```
+
+
+```{r}
+
+
+#low <- test %>% 
+#  subset(!is.na(Infections_PD_var), select = Infections_PD_var) %>% 
+#  as.matrix() %>% 
+#  sum() 
+
+
+```
 ## Rough model
 
 Great, we got most of our days filled it, however we are missing 17 values of the closest dates. This is because we used the deaths from 17 back. We also have some unknown values in the beginning due to having no deaths, however those values wont matter too much for as it wont effect our totals too much.
 
 ```{r}
-test %>% 
-  subset(select = -c(Deaths_Rate_Change)) %>% 
-  head(10)
+
 ```
 As shown, we now have our per day Infections!
 
