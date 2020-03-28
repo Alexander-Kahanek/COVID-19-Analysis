@@ -1,6 +1,6 @@
 # Covid-19-Analysis
 
-* Welcome to my Covid-19 Analysis and prediction model!
+Welcome to my Covid-19 Analysis and prediction model!
 
 * The Covid-19-Analysis.rmd is the file that contains my Analysis and walkthrough behind building my predictive model!
 
