@@ -114,7 +114,10 @@ total <- raw %>% #Get total values for seperate df
   summarise(
     Value = max(Value)
   ) %>% 
-  ungroup()
+  ungroup() %>% 
+  mutate(
+    Status = as.character(Status)
+  )
 
 #get change per day
 raw <- raw %>%
@@ -122,11 +125,11 @@ raw <- raw %>%
   mutate(
     Change =  Value - lag(Value, k=1),
     Rate_Change =  (Value - lag(Value, k=1))/lag(Value, k=1) 
-    )
-
-#my status' were being read in as factors
-raw$Status <- as.character(raw$Status)
-total$Status <- as.character(total$Status)
+    ) %>% 
+  ungroup() %>% 
+  mutate(
+    Status = as.character(Status)
+  )
 ```
 
 Now that the data is clean, lets start digging into the data!
@@ -137,7 +140,7 @@ Now that the data is clean, lets start digging into the data!
 ## Cumulative Total Cases
 ```{r}
 plot_data <- total %>% 
-  subset(Country == "US" | Country == "China" | Country == "Italy" | Country == "Germany" | Country == "Spain" )
+  subset(Country %in% c("US", "China", "Italy", "Germany", "Spain"))
 
 p <- plot_data %>% 
   ggplot(aes(reorder(Status,Value), Value, fill = Country))+
@@ -155,7 +158,7 @@ The above graph shows the variance of cumulative cases by type, and by country. 
 
 ```{r}
 total %>% 
-  subset(Country == "US" | Country == "China" | Country == "Italy" | Country == "Germany" | Country == "Spain" ) %>% 
+  subset(Country %in% c("US", "China", "Italy", "Germany", "Spain")) %>% 
   subset(Status == "Deaths") %>% 
   hchart("treemap",
          colorByPoint = TRUE,
@@ -524,7 +527,7 @@ italy <- raw %>%
 tail(italy,5)
 ```
 
-Now that this step is complete, we can calculate the change in our death rate of change. Essentially looking at how much our rates are fluctiating over time. We can do this simply by taking our first deaths rate of change and subtracting the second days rate of change from that. This will mean if our rate goes up, our change will go up aswell!
+Now that this step is complete, we can calculate the change in our death rate of change. Essentially looking at how much our rates are fluctiating over time. We can do this simply by taking our first deaths rate of change and subtracting the second days rate of change from that. This will mean if the rate goes up, the change will go up as well!
 
 ```{r}
 get_dr_c <- function(data){
@@ -542,7 +545,7 @@ italy <- italy %>%
 tail(italy,5)
 ```
 
-Great, here are Italys' cumulative Deaths, Deaths per day, Deaths rate of change, and the change in the rate of change. We will use all this information to work backwards at the end, to fill in our predictions.
+Great, here are Italys' cumulative Deaths, Deaths per day, Deaths rate of change, and the change in the rate of change. We will use all this information to work backwards at the end, to fill in the predictions.
 
 ```{r}
 ##save og data!
@@ -552,7 +555,7 @@ split_for_graph <- function(data, split){
   data <- data %>% 
     subset(!is.na(D_RC_C))
   
-  #take only the bottom quarter
+  #taking the bottom 8 samples
   data <- data[ceiling(nrow(data)-(split-1)) : nrow(data),]
   
   mu = data %>% 
@@ -603,7 +606,7 @@ hchart(density(italy$D_RC_C), type = "area", color = "red", name = "Rate of Deat
   hc_legend(align = "left")
 ```
 
-This is the distribution of our rate of change, we want to take a look at this to make sure it is relatively normal, otherwise there will be a different method needed to make predictions from.
+This is the distribution of the rate of change, we want to take a look at this to make sure it is relatively normal, otherwise there will be a different method needed to make predictions from.
 
 ```{r}
 shapiro.test(italy$D_RC_C)
@@ -613,9 +616,30 @@ Exactly what we wanted to see, our p value is > 0.05, meaning our distribution i
 
 ## Building the predictions
 
-MATH
-    
+Now that we have the changes per day, we can build the prediction model. I will break this down into steps:
 
+* Get the current mean and standard deviation of the change in rate
+
+* use rnorm to generate a random sample
+  + add up every sample and divide by the number of samples, to get the mean of your change.
+    - adding more samples will bring your changes closer to their means, while having fewer samples will keep a bigger variance in our random change.
+    
+* add this new sample to the bottom of the data pool, take off the top sample to the data pool
+  + think of this as a revolving door, the sampling will change with line. This will linearize our function of change, however when we calculate backwards we are effectively taking the integral of it, twice, which gives us our curve!
+  
+*  Once we have all our predictions we can math backwards!
+
+* Calculate the missing rate of changes, based off the value of your change in rate and previous rate!
+
+* Calculate the per death amound by taking the previous per death time your new rate of change
+  + after this, since the rate 'should' trend downwards, the algorithm will end up with negative per day results. This is to be expected, however we cannot lose infected individuals so we need to fix this.
+    - we fix this by multiplying by -1!
+
+
+* Calculate the total deaths by taking the previous deaths total and adding the new per day
+  + when those negative numbers go through the algorithm, it will subtract from our total deaths! To reverse this, we add two times our old per day amount, assuming we have already multiplied by -1.
+  
+* Thats it!
 
 ```{r}
 ### functions used inside function below
@@ -627,19 +651,31 @@ get_rc <- function(death_rc_n1, change){
   
 get_pd <- function(deaths_n1, deaths_rc){
   #lag death*roc = pd
-  pd = (deaths_rc*deaths_n1)
+    pd = (deaths_rc*deaths_n1)
+  
   return(ceiling(pd))
 }
   
 get_death <- function(lag_death = lag_death, dpd){
-  #lag death + death per dat = next cumulative death
+  #lag death + death per day = next cumulative death
   death = lag_death+dpd
   return(ceiling(death))
 }
 
+get_random <- function(n,mu, sd){
+  rand =0
+  for (i in 1:n){
+    i = i*11 #this is done to get vast variances in our seeds
+    set.seed(i)
+  rand <- rand + rnorm(1, mu, sd)
+  }
+  rand <- rand/n
+  return(rand)
+}
+
 ### function used for prediction model
-prediction_model <- function(data, og_d, days, r_seed, country){
-  set.seed(r_seed)
+prediction_model <- function(data, TRIALS, og_d, days, r_seed, country){
+  #set.seed(r_seed)
   
   mu <- data %>% #grabbing first mean
     subset(select = D_RC_C) %>% 
@@ -651,7 +687,7 @@ prediction_model <- function(data, og_d, days, r_seed, country){
     as.matrix() %>% 
     sd()
     
-  pred <- rnorm(1, mu, sd) #getting a random prediction
+  pred <- get_random(TRIALS,mu,sd) #getting a random prediction
   
   temp <- data
   
@@ -678,7 +714,7 @@ prediction_model <- function(data, og_d, days, r_seed, country){
     as.matrix() %>% 
     sd()
   
-    pred <- rnorm(1, mu, sd) #grabbing the new prediction!
+    pred <- get_random(TRIALS,mu,sd) #grabbing the new prediction!
   } #repeat
   
   data <- data %>% #combining our data back to our real data
@@ -713,10 +749,10 @@ prediction_model <- function(data, og_d, days, r_seed, country){
   }
   
   
-  #Here is where we need to fix our data, we ended up getting negative deaths per day after a certain time, and this started making out cumulative deaths decrease. This is intended, as we need these deaths per day values, but we need to swap it back to negative!
+  #Here is where we need to fix our data, we ended up getting negative deaths per day after a certain time, and this started making the cumulative deaths decrease. This is intended, as we need these deaths per day values, but we need to swap it back to positive!
   
   #Another thing to note, is I changed the cumulative deaths to match our decreasing deaths per day, essentially this fixes our model to reflect the real world, as people cannot become undead!
-  bool = 1
+  
   for (i in 2:nrow(temp)){
     
     if (temp[i,3] < 0){
@@ -724,7 +760,7 @@ prediction_model <- function(data, og_d, days, r_seed, country){
         temp[i,2] <- temp[i-1,2] + (2*temp[i,3]) #adjust from previous calculations using negative numbers
     }
     else{
-      temp[i,2] <- temp[i-1,2] + temp[i,3] #recalculate, this is incase if bounces beteween negative and positive
+      temp[i,2] <- temp[i-1,2] + temp[i,3] #recalculate, this is incase it bounces beteween negative and positive
     }
   }
 
@@ -737,7 +773,7 @@ prediction_model <- function(data, og_d, days, r_seed, country){
 }
 
 italy <- italy %>% 
-  prediction_model(og_d = og, days = 100, r_seed = 23, country = "Italy")
+  prediction_model(TRIALS = 1000, og_d = og, days = 100, r_seed = 23, country = "Italy")
 
 og <- og %>% 
   mutate(
@@ -776,3 +812,6 @@ pred_italy %>%
   hc_legend(align = "left")
 ```
 
+```{r}
+rm(list=setdiff(ls(), list("pred_italy", "raw")))
+```
