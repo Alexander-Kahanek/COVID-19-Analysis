@@ -5,6 +5,7 @@ Welcome to my Covid-19 Analysis and prediction model!
 My Covid-19 Analysis includes an in-depth look at Italys' Confirmed Deaths. It also includes a complete walkthrough of how I build my algorithm, in order to predict the future Death Counts! 
 * It will also include an Analysis of my model
 *******
+FILES
 
 * The Covid-19-Analysis.rmd is the file that contains my Analysis and walkthrough behind building my predictive model!
 
