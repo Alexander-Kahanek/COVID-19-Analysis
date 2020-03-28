@@ -16,7 +16,7 @@ My Covid-19 Analysis includes an in-depth look at Italys' Confirmed Deaths. It a
 ******* 
 PLANS
 
-** I plan on designing a graph that will pair my predictive models up with the actual data, as it gets released!
-**
-** When everything is said and done, I will do a short follow up Analysis on how well my predictive algorithm stood up to time!
+* I plan on designing a graph that will pair my predictive models up with the actual data, as it gets released!
+
+* When everything is said and done, I will do a short follow up Analysis on how well my predictive algorithm stood up to time!
 *******
