@@ -11,7 +11,9 @@ FILES
 
 * The Covid-19-Script.R is the script that you can use to generate any results off of my model! It has settings you can adjust at the top, and explains how to run it inside the script!
 
-* The graphs folder will include all graphs that I have made for the Analysis, as well as for my predictive model!     
+* The graphs folder will include all graphs that I have made for the Analysis, as well as for my predictive model!   
+
+* raw folder will include the data files for my analysis, I will link the source at the bottom.
 
 ******* 
 PLANS
@@ -20,3 +22,6 @@ PLANS
 
 * When everything is said and done, I will do a short follow up Analysis on how well my predictive algorithm stood up to time!
 *******
+SOURCES
+
+data: https://data.humdata.org/dataset/novel-coronavirus-2019-ncov-cases
