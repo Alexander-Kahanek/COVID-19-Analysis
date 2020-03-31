@@ -1,7 +1,7 @@
 ### INFO YOU CAN CHANGE #########
 COUNTRY = "Italy" #### Country you are looking for
-DAYS = 6 ####### Number of days(ish) you want to predict 
-TRIALS = 10 #### Number of TRIALS to run
+DAYS = 10 ####### Number of days(ish) you want to predict 
+TRIALS = 20 #### Number of TRIALS to run
 SPLIT = 8 #### How many previous days you want to predict off
 FOLDER = "raw" ######## Folder for the data
 ################
@@ -288,7 +288,7 @@ hc <- hc %>%
                label = list(text = "This is the Predicted Data"),
                color = "lightblue",
                from = datetime_to_timestamp(as.Date(data_date)+1),
-               to = datetime_to_timestamp(as.Date('2020-06-02'))
+               to = datetime_to_timestamp(as.Date('2025-06-02'))
              )))%>% 
   hc_legend(align = "left") %>% 
   hc_add_series(name = "Actual Data", data = og, type = "line", hcaes(x=Date, y=Deaths), color = "black")
