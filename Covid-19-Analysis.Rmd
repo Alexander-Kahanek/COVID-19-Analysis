@@ -492,11 +492,19 @@ $\frac{f(1)}{P_0}=1+r$
 
 $r=\frac{f(1)}{P_0}-1$
 
-$\frac{dr}{dt}=\frac{\Delta f(1)}{P_0}=\frac{f(1)-f(0)}{P_0}$
+$r=\frac{\Delta f(1)}{P_0}$
 
 $s.t.f(0)=P_0$
 
-$f(1)=(\Delta r*P_0)+P_0._\square$
+$r=\frac{f(1)-f(0)}{f(0)}$
+
+FIXING
+
+$r_1-r_0=\frac{f(1)-f(0)}{P_0}$
+
+$r_1=\frac{f(1)-f(0)}{P_0}+r_0$
+
+$f(1)=(r_0*P_0)-(r_1*P_0)+P_0._\square$
 
 In plain terms, the day to predict is equal to the change in our rate, times the previous day, plus the previous day. This means, if we try to predict the change in our rate, we can find our predicted Cumulative Deaths!
 
@@ -517,7 +525,7 @@ Lets dive in by taking a look at how our rates of change work!
 
 To start, we know how much our Deaths are changing per day, we can formulate what percentage this change is from our cumulative Deaths. To do this, we need the following formula:
 
-$r(t)=\frac{\Delta f(t)}{P_0}$
+$r=\frac{\Delta f(t)}{P_0}$
 
 In plain terms, this formula takes the change per day of our deaths, and divides that by our previous days cumulative Deaths! Making the deaths per day into a percentage of our cumulative deaths!
 
