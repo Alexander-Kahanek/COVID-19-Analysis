@@ -1,9 +1,13 @@
 ### INFO YOU CAN CHANGE #########
 COUNTRY = "Italy" #### Country you are looking for
-DAYS = 10 ####### Number of days(ish) you want to predict 
-TRIALS = 20 #### Number of TRIALS to run
-SPLIT = 8 #### How many previous days you want to predict off
+DAYS = 6 ####### Number of days(ish) you want to predict 
+TRIALS = 100 #### Number of TRIALS to run
+SPLIT = 3 #### How many previous days you want to predict off
 FOLDER = "raw" ######## Folder for the data
+########
+# SAVE DATA
+SAVE = 1
+FILE = "predictions/split-%s-italy-23.csv"
 ################
 ## HOW TO RUN: CTRL + A, then run as a section.
 ##
@@ -111,26 +115,20 @@ get_dr_c <- function(data){
 get_rc <- function(death_rc_n1, change){
   #rc = lag death_rc + change
   rc=death_rc_n1+change
+  if(rc <0){
+    rc =0
+  }
   return(rc)
 }
 
 get_pd <- function(deaths_n1, deaths_rc){
   #lag death*roc = pd
-  
   pd = (deaths_rc*deaths_n1)
-  if (pd <0){
-    pd = pd * -1
-  }
-  
   return(ceiling(pd))
 }
 
 get_death <- function(lag_death = lag_death, dpd){
   #lag death + death per dat = next cumulative death
-  if(dpd <0){
-    dpd <- dpd * -1
-  }
-  
   death = lag_death+dpd
   return(ceiling(death))
 }
@@ -263,6 +261,11 @@ for (i in 1:TRIALS){
   }
 }
 
+predictions <- predictions %>% 
+  mutate(
+    Deaths_RC = abs(Deaths_RC)
+  )
+
 ##########################
 ## PLOTTING
 hc <- highchart() 
@@ -294,3 +297,15 @@ hc <- hc %>%
   hc_add_series(name = "Actual Data", data = og, type = "line", hcaes(x=Date, y=Deaths), color = "black")
 
 hc
+
+# SAVING DATA
+if (SAVE == 1){
+  FILENAME = sprintf(FILE, SPLIT)
+  
+  predictions <- predictions %>% 
+    mutate(Split = SPLIT) %>% 
+    subset(Date >= data_date) %>% 
+    write.csv(FILENAME)
+}
+
+

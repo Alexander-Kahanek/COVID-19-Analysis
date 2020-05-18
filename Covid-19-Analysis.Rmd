@@ -1,26 +1,73 @@
 ---
-title: "Covid-19 Analysis"
+title: "COVID-19 Monte Carlo Simulation Build and Analysis"
 author: "Alexander Kahanek"
 date: "3/24/2020"
 output: 
-    html_document:
-        number_sections: true
-        toc: true
-        theme: cosmo
-        highlight: tango
-        code_folding: hide
+    rmdformats::readthedown:
+      code_folding: hide
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    highlight: tango
 ---
 
 ```{r}
 knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ```
 
+
 # Welcome
 
-data gathered from
-https://data.humdata.org/dataset/novel-coronavirus-2019-ncov-cases
+In this write-up I will be going over a small Analysis of the COVID-19 data, specifically a look into Italys' Confirmed Deceased Cases. Then I will hand-build, and implement, a Monte Carlo Algorithm, using a Markov Chain Technique. This will help build information and give insight into how exactly this virus will progress, and can lead to knowledge about how COVID-19 is spreading in the communities.
 
-# Cleaning data
+For all the graphs, please know that that they are interactive! You can deselect anything in the legends, or mouse over them all for more detailed information!
+
+DATA GATHERED FROM:
+
+    https://data.humdata.org/dataset/novel-coronavirus-2019-ncov-cases
+    
+    
+## What is a Markov Chain Monte Carlo Algorithm
+
+A Morkov Chain Monte Carlo Algorithm follows the basic concept that all Monte Carlo Algorithms have:
+
+* It simulates a bunch of paths, or 'walks', that an event can occur.
+  + Essentially, it is a good technique at exploring every option, and finding the likelyhood of something happening.
+  
+* It creates the paths based on the previous data, generating a random number based on the probability of an event occuring.
+  + For the Algorithm I will build, it will generate a random number based on the previous Changes in the Rate of Change for the Deceased Cases.
+  
+* Monte Carlo Algorithms are generally simulated thousands of times, if not more.
+  + I will only be running a max of 100 trials, this is due to computer power, as well as ease of analysis for this write-up.
+  
+Now, lets dig into how a Markov Chain operates:
+
+* It uses a set window to judge the next random number off of.
+  + This can be pictured as a revolving door, or a first-in first-out line.
+  
+* Essentially, you start with the set window, say the past 8 days rate of change value, then after you predict the next day you drop the oldest rate out.
+  + This constantly limits the Algorithm to predict a random number based on the chosen window, in this case 8 days.
+    - However, the Algorithm will be implemented with multiple windows.
+    
+* It allows the algorithm to adjust based on the previous predictions,
+  + this is important as it needs to learn where to go from the previous data.
+  
+
+This technique is useful for a few reasons:
+
+* It allows the Algorithm to converge to a number, based on the previous data.
+  + This is an attempt to mimic what will actually happen over time.
+  
+* It allows for a full exploration of the possible paths,
+  + this is especially true as the number of simulation paths increases.
+  
+* With enough simulations, one can deduce the likelyhood of certain aspects happening.
+  + For example, what is the most likely number the rate of change will converge to.
+
+
+## Cleaning the data
+
 
 Here I am doing a few things:
 
@@ -126,10 +173,18 @@ raw <- raw %>%
 
 Now that the data is clean, lets start digging into the data!
 
+
 # A Quick Analysis
 
 
+In this I will be going over an in-depth analysis of Italys' Deceased Cases.
+
+First, lets start with looking at the overall feel of the top 5 Countries, in terms of cases.
+
+
 ## Cumulative Total Cases
+
+
 ```{r}
 plot_data <- total %>% 
   subset(Country %in% c("US", "China", "Italy", "Germany", "Spain")) %>% 
@@ -147,9 +202,9 @@ p <- ggplotly(p)
 p
 ```
 
-The above graph shows the variance of cumulative cases by type, and by country. We can see some pretty interesting things here. For example, Italy has the highest deaths and active cases, yet they are only second in the number of confirmed cases. This could mean a few things:
+The above graph shows the differences of cumulative cases by type, and by country. Some pretty interesting things can be found here. For example, Italy has the highest deaths and active cases, yet they are only second in the number of confirmed cases. This could mean a few things:
 
-* Italy may not have been testing enough people, which would bring their Mortality Rate up.
+* Italy may not have been testing enough people, which would start to bring their Mortality Rate down.
 
 * Italys' healthcare system is getting overrun, and their deaths are about to skyrocket.
 
@@ -165,13 +220,15 @@ total %>%
            align = "left")
 ```
 
-This graph perfectly shows just how many Deaths Italy has compared to our top 5 countries. At the time of writing this, Italy has just about doubled their death count over Chinas'!
+This graph perfectly shows just how many Deaths Italy has compared to the other four countries. At the time of writing this, Italy has almost more Deaths than the other 4 countries combined!
 
 For the remainder of this analysis, I will be focusing on Italy.
 
+
 ## Rates of Change
 
-Theres a couple things to keep in mind when looking at the rate of change.
+
+Theres a couple things to keep in mind when looking at the rate of change. For example,
 
 * It has more variance in the beginning.
 
@@ -179,9 +236,9 @@ Theres a couple things to keep in mind when looking at the rate of change.
 
 This is the basic Exponential growth function:
     
-**$f(x) = P_0(1+r)^d$**
+* $f(t,r)=P_0(1+r)^t$
    
-The rate is what gets exponentiated for an exponential function, ie, if our mean rate is higher, our confirmed cases will get exponentially higher with each day. Also, if the rate is negative that means our cases per day has dropped from the previous days' number. If there starts to be a trend of negative rates, this means that the disease is starting to slow down, which could mean we are past the peak.
+The rate is what gets exponentiated for the function, ie, if the rate of change is higher, the confirmed cases will get much higher with each day. Also, if the rate of change is lower that means the cases per day has dropped from the previous days' number. If there starts to be a trend of consecutively lower rates of change, this means that the disease is starting to slow down, which can be indicitive of being past the peak.
 
 ```{r}
 plot_data <- raw %>% 
@@ -214,7 +271,9 @@ hchart(density(p_a$Rate_Change), type = "area", color = "yellow", name = "Rate o
                             return ('Rate of Change: ' + this.y)}"))
 ```
 
-This graph clearly shows that the deaths rate of change has not only a higher average, but most of the rates are higher than the rate of confirmed. This tells us the number of deaths are going up much faster than our confirmed cases are.
+    Remember: You can deselect the different Rates in order to get a closer look.
+
+This graph plainly shows that the Deaths rate of change has not only a higher average, but most of its' rates are higher than the rate of confirmed. This tells us the number of deaths are going up much faster than the confirmed cases are.
 
 There are a multitude of reasons why this could happen:
 
@@ -222,15 +281,23 @@ There are a multitude of reasons why this could happen:
 
 * The Confirmed cases are innacurate, as finding this true value is difficult.
 
-* Our Mortality rate is not static
-  + This is a likely scenario for a few reasons.
-    - Healthcare systems can be overrun, causing more deaths.
-    - Population ages vary depending on location, and we know Covid-19 has a higher Mortality rate among an older population.
+* The Mortality rate is not a static number,
+  + this is a likely scenario for a few reasons,
+    - the healthcare systems can be overrun, causing more deaths.
+    - the population ages vary depending on location, and COVID-19 is known to have a higher Mortality rate among an older population,
+    -as well as much more unknown factors.
 
-* Rates tend to even out over time, meaning in the beginning stages the rate of change will be much higher than later on.
-  + If we have 1 person infected today, and another tomorrow, the rate of change from day 1 to day 2 is 2.0
+* The Rates of change will tend to even out over time, which will really be shown in the Changes of the Rates themselves.
+  + Meaning, in the beginning stages of the rate of change, it will start with a lot of extreme jumps.
+    - For example, if there is 1 person infected today, and another tomorrow, for a total of two Deaths, the rate of change from day 1 to day 2 will be 1.0.
+    - Also, if the next day has no Deaths reported, then the rate of change will stay at 1.0, however the change in that rate per day will be 0.
+  
+  
+This will be important for how the Monte Carlo Algorithm is built.
+
 
 ## Deeper look at Italys' Death Rate of Change
+
 
 ```{r}
 raw %>% 
@@ -262,15 +329,30 @@ raw %>%
 Looking at this scatter plot, as the number of Deceased cases rise, the Rate of Change trends downwards. This means that Italy has a negative correlation between the actual change in cases per day and the rate of change. This is a good thing, as it could mean a few things:
 
 * The infection rate is starting to slow down.
-* The rate of change is starting to average out to a lower number.
 
-Lets find out how well correlated the two actually are, using pearsons' method.
+* The rate of change is starting to converge to a lower number.
+  + Essentially, as the number of days increase, the variance in the changes of these rates will decrease.
+    - Meaning, the rate of change should get closer to a linear line, as the number of days increase.
+    
+This is important for the Monte Carlo Algorithm, as it needs to emulate this effect on its predictions.
 
 
-Before we start, I will get the outliers out of the data, as some of the early rates are innacurate, for the reasons described before.
+Lets find out how well correlated the two actually are, using pearsons r method.
+
+
+Before this is done, the outliers need to be taken out of the data, as some of the early rates as those are innacurate, for the reasons described before. The distrubtion of these altered rates will also need to be checked for normality, this can be done simply with the Shapiro-Wilk test.
 
 ```{r}
-corr <- raw %>% #subsetting our data
+get_dr_c <- function(data){
+  #Calulating the change in the rates of change
+  data <- data %>% 
+    mutate(
+      D_RC_C = Rate_Change - lag(Rate_Change,k=1)
+    )
+  return (data)
+}
+
+corr <- raw %>% #subsetting the data
   subset(Country == "Italy") %>% 
   subset(!(is.na(Rate_Change))) %>%
   subset(!(is.na(Change))) %>%
@@ -284,31 +366,25 @@ cd_mean = mean(corr$Change) #mean for cases per day
 
 corr <- corr %>% #removing outliers
   subset(rc_mean-rc_sd*3 <= Rate_Change | Rate_Change <= rc_mean+rc_sd*3) %>%
-  subset(cd_mean-cd_sd*3 <= Change | Change <= cd_mean+cd_sd*3) %>%  subset(Rate_Change < 1) #we have a few outliers that need to go
+  subset(cd_mean-cd_sd*3 <= Change | Change <= cd_mean+cd_sd*3) %>%  subset(Rate_Change < 1) #deleting outliers
 
 std_corr <- corr %>% 
   mutate(
-    Rate_Change = (Rate_Change - rc_mean)/rc_sd
+    Deaths_RC = (Rate_Change - rc_mean)/rc_sd
   ) %>% 
-  subset(Rate_Change <= 1) #we have a few outliers that need to go
+  subset(Rate_Change <= 1) %>%  #deleting outliers
+  get_dr_c() %>% 
+  subset(!is.na(D_RC_C))
 ```
 
-First, lets check to see if our Rate of Change is relatively normal.
+Now that that is done, lets check to see if the Rate of Change distribution is relatively normal.
 
-```{r}
-shapiro.test(std_corr$Rate_Change)
-```
-
-This tells us that our p value is 0.1314 > 0.05
-
-This is great news! It means our data is normal, and this means that we can use our Rate of Deaths as a predictor for our model!
-
-```{r}
-hchart(density(std_corr$Rate_Change), type = "area", color = "red", name = "Rate of Deaths") %>%
+```{r, echo= FALSE}
+hc <- hchart(density(std_corr$D_RC_C), type = "area", color = "red", name = "Rate of Deaths") %>%
   hc_add_theme(hc_theme_flat()) %>% 
   hc_title(text = "Distribion of the Rate of Change, per Day",
            align = "left") %>% 
-  hc_subtitle(text = "For Italy",
+  hc_subtitle(text = "For Italys' Deceased Cases",
               align = "left") %>% 
   hc_yAxis(labels = list(format = "{value}")) %>% 
   hc_xAxis(labels = list(format = "{value}"),
@@ -320,9 +396,65 @@ hchart(density(std_corr$Rate_Change), type = "area", color = "red", name = "Rate
                             return ('Rate of Change: ' + this.y)}"))
 ```
 
+```{r}
+hc
+```
+
+The distribution here is the rate of changes after removing the outliers. There is a clear Positive Skew in this graph, meaning the bulk of the data is trending to the left.
+
+We should see this trend increase after the Monte Carlo Algorithm is applied.
+
+## Shapiro-Wilk Test
+Lets use a shapiro Wilk Test to check its normality. But first, I will explain what the test is:
+
+*The null-hypothesis of this test is that the population is normally distributed.
+
+  + Thus, if the p value is less than the chosen alpha level,
+    - then the null hypothesis is rejected and there is evidence that the data tested are not normally distributed.
+    -likewise, if the p value is greater than the alpha level, then the data is normally distributed!
+
+* It is regarded as being the best test for checking the significance level for the above null Hypothesis;
+  + fun fact: this was tested by Monte Carlo Simulations.
+  
+
+* $W=\frac{(\sum\limits_{i=1}^{n}a_ix_{(i)})^2}{(\sum\limits_{i=1}^{n}x_i-\bar{x})^2}$
+
+In plain terms, this is the slope of the QQ plot, over the variance. As the slope of the QQ plot approaches the Variance,
+
+* ie, the distribution reaches normality, W will approach 1.
+  + Thus, a number close to 1 indicates a higher level of normality!
 
 ```{r}
+shapiro.test(std_corr$Rate_Change)
+```
+
+Awesome, there are a few things to take from this! 
+
+* The W value is 0.945 which is less than 1, but only by 0.05497,
+  + This means that the slope of its QQ Plot is relatively close to 1, telling us this data is really close to a normal distribution.
+
+The test also indicates that the p value is 0.1483 which is greater than 0.05 (a 95% confidence interval)!
+
+This is great news! As it means that the null hypothesis is rejected! Telling us two things:
+
+* The Change in Rates Distribution is not stastically different from a normal distribution.
+
+* The Change in Rates Distribution can be used in any further testing that requires a normal distribution.
+
+
+Lets' go back to the original goal of checking pearsons r and r^2^, this will help determine if these factors can be used as predictors for the Cumulative Deaths.
+
+## Pearsons r and r^2^
+
+Lets take a look into Pearsons r, this will tell us how correlated the data is, ie, how well fit the mean line is compared to the actual data.
+
+```{r}
+corr <- corr %>% 
+  get_dr_c() 
+
 corr %>% 
+  subset(!is.na(D_RC_C)) %>% 
+  as.matrix() %>% 
   cor() %>% #get correlation
   round(3) %>% #round
   hchart() %>% #graph
@@ -331,8 +463,8 @@ corr %>%
            align = "left") %>% 
   hc_subtitle(text = "For Italys' Deceased Cases",
               align = "left") %>% 
-   hc_xAxis(categories = list("Cumulative Deaths", "Cases per Day", "Rate of Change")) %>% 
-  hc_yAxis(categories = list("Cumulative Deaths", "Cases per Day", "Rate of Change"))%>% 
+   hc_xAxis(categories = list("Cumulative Deaths", "Cases per Day", "Rate of Change", "Change in Rate")) %>% 
+  hc_yAxis(categories = list("Cumulative Deaths", "Cases per Day", "Rate of Change", "Change in Rate"))%>% 
    hc_legend(align = "left") %>% 
   hc_plotOptions(
            series = list(
@@ -340,14 +472,24 @@ corr %>%
              dataLabels = list(enabled = TRUE)))
 ```
 
-## Finding the significance of Italys' Rate of Deceased Cases
+As expected there is a negative correlation between the Rate of Change and Total cases, as well as a negative correlation between the Rate of Change and the cases per day.
 
-As expected there is a negative correlation between the Rate of Change and Total cases, aswell as a negative correlation between our Rate of Change and the cases per day.
+This makes sense, and indicates that as the amount of Cumulative Deaths increase the Rate of Change will start to decrease as well. This is great news for a few reasons:
 
-This makes sense as the amount of cases increase, our rate should start having less variations. This is also great news, as it means our rate is trending downwards, ultimately suggesting that the rate of Deaths per day is slowing down.
+  * This ultimately suggests that the rate of Deaths per day is slowing down
+  
+  * This suggests that the Rate of Change is starting to normalize, causing less drastic changes in the over changes in these Rates.
+    + Generally, the Rate of Change will start to converge to a single number.
+
+The opposite is true with the positive r values.
+For exampe, the r value between the Cumulative Deaths and the Cases per day is 0.938! This highly suggests that as the Cumulative Deaths start to increase, so will the Number of Cases per day.
+
+That is about all the information that Peasrsons r can provide, so lets take a loot at Pearsons r squared!
 
 ```{r}
 corr %>% 
+  subset(!is.na(D_RC_C)) %>% 
+  as.matrix() %>% 
   cor() %>% #get correlation
   '^'(2) %>% #square numbers
   round(3) %>% #round
@@ -357,8 +499,8 @@ corr %>%
            align = "left") %>% 
   hc_subtitle(text = "For Italys' Deceased Cases",
               align = "left") %>% 
-   hc_xAxis(categories = list("Cumulative Deaths", "Cases per Day", "Rate of Change")) %>% 
-  hc_yAxis(categories = list("Cumulative Deaths", "Cases per Day", "Rate of Change"))%>% 
+   hc_xAxis(categories = list("Cumulative Deaths", "Cases per Day", "Rate of Change", "Change in Rate")) %>% 
+  hc_yAxis(categories = list("Cumulative Deaths", "Cases per Day", "Rate of Change", "Change in Rate"))%>% 
    hc_legend(align = "left") %>% 
   hc_plotOptions(
            series = list(
@@ -366,16 +508,60 @@ corr %>%
              dataLabels = list(enabled = TRUE)))
 ```
 
-The r squared value can tell us much more, for example, we know that 88.7% of our Cases per day can be explained by our Total cases! This also tells us that 29.4% of our Cumulative cases can be explained by the variations in the Rate of Change.
+The r squared value can tell us much more, for example,
 
-Let's check if these values are statistically significant, to do that we need the below formula to get our test statistic.
+* there is a r^2^ value of 0.88 between the Cumulative deaths and the Cases per day.
+    + This means 88.7% of the Cases per day can be explained by the Total cases, or vice versa! 
+    
+* there is also a high correlation between a few other factors,
+  + Change in Rates and the Rates of Change (0.496 pearsons r^2^)
 
-${ts} = \frac{r*\sqrt[2]{n-2}}{\sqrt[2]{1-r^2}}$
+* There is a moderate correlation between the Rate of Change and the Cumulative Deaths (0.279 pearsons r^2^).
+
+* Also noting, there is a small correlation between two sets of factors.
+  + Rate of Change and Deaths Cases per day (0.133 pearsons r^2^).
+  + Change in Rate and Deaths Cases per day (0.034 pearsons r^2^).
+  
+* Lastly, there is a correlation of 0.0 between the Change in Rate, as well as the Cumulative Deaths.
+  + This is for the Algorithm, as it means the predictor of Change in Rates will be completely random according to the Cumulative Deaths, while also being highly correlated to factors that directly effect the Cumulative Deaths.
+    - Esentially, attempting to simulate all the possible random events that can occur for the spread of COVID-19.
+    
+Let's check if these values are statistically significant, to do that the following test needs to be done.
+
+
+## Testing the Correlations
+
+
+Null Hypothesis:
+
+* There is not a significant linear relationship between the following categories:
+  + Cumulative Deaths and Cases per day,
+    - $r^2=0.88$
+  + The Rate of Change and the Cumulative Deaths,
+    - $r^2=0.279$
+  + The Rate of Change and the Changes in those Rates,
+    - $r^2=0.469$
+    
+* Therefore, the respective regression line CANNOT be used to model a linear relationship in the population.
+
+Alternate Hypotheses:
+
+* There is a significant linear relationship between the above categories.
+
+This test requires the following formula:
+
+* ${t}=\frac{r*\sqrt[2]{n-2}}{\sqrt[2]{1-r^2}}$
+
 
 ```{r}
-df = nrow(corr)-2 #our degree of freedom
-cv = qt(.975, df) #our test statistic
-r <- corr %>% #correlating our data for r values
+df = nrow(corr)-2 #the degree of freedom
+cv = qt(.975, df) #the ritical value
+r <- corr %>% #correlating the data for r values
+  subset(!is.na(D_RC_C)) %>% 
+  rename(
+    Deaths = Value,
+    Change_in_Rates = D_RC_C) %>% 
+  as.matrix() %>% 
   cor()
 
 call_ts <- function(r, df){#function for getting the test statistic
@@ -383,151 +569,122 @@ call_ts <- function(r, df){#function for getting the test statistic
     return (ts)
   }
 
-#changing our matrix to be the test statistics
+#changing the matrix to be the test statistics
 ts <- call_ts(r, df)
 ts
 ```
 
-These are our test statistics for each r value, now we need to use the below formula to check if the r value is statistically significant.
+These are the test statistics for each r value, now the below formula can be used to check if the r value is statistically significant.
 
-${-ts} > r > ts$
+* ${-t} > r > t$
 
-Here is a matrix of our r values.
+Here is a matrix of the r values.
+
 ```{r}
 r
 ```
 
-This tells us that our all our correlations are statistically significant! Which means that we can use all of our factors as a predictor of the other.
+This tells us that all of the correlations are statistically significant! Which means that all of the factors can be used as a predictor of the other.
 
-I will be using the correlation between Italys' Deaths rate of change to predict our Deaths per day values, as this is a statistically significant correlation, and the math lines up.
+This is very important for building the algorithm to the Monte Carlo Simulator.
 
-# Building a model of Italys' Deaths per day
 
-## Facts before the build
+## Quick Notes: Infected Cases
 
-There are two things I want to point out about Covid-19:
 
-* We know the median incubation period is 5 days.
-    + This means that there is most likely a 5 day lag in our confirmed cases, as 50% of infected individuals will not experience any symptoms before the incubation period.
+There are a few things I want to point out about COVID-19:
 
-* We know the average days from illness onset to death is 18 days.
-    + This can help us estimate the amount of infections 23 days prior.
+* The true Cumulative Infected Cases would consist of everybody that has, at some point, contracted COVID-19,
+  + including those that are Deceased, Recovered, or Actively sick.
+
+* The median incubation period is 5 days.
+    + This means that there is most likely a 5 day lag in the confirmed cases, as 50% of infected individuals will not experience any symptoms before the incubation period.
+      - This is ontop of an innacurate Cumulative Confirmed Cases.
+
+* The average days from illness onset to death is 18 days.
+    + This can help to estimate the amount of infections 23 days prior to any given date,
+      - as it takes about 5 days for the illness onset to begin after the time of infection.
     
-Using these two facts, we can estimate the average time from point of infection to death is 23 days (5 incubation days + 18 days till death). This means that if someone dies today from Covid-19 we can estimate that they got infected 23 days prior.
     
-sources: 
+Using these facts, one can estimate the average time from point of infection to death is 23 days (5 incubation days + 18 days till death). This means that if someone dies today from COVID-19 it can be estimated that they got infected 23 days prior. This will help us later on for assessing the total amount of Infected Cases.
+  
+These are also the reasons I believe it is best to use the Deaths as the base predictor for the Monte Carlo Simulator.
 
-https://www.uptodate.com/contents/coronavirus-disease-2019-covid-19?source=history_widget
-
-https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(20)30566-3/fulltext
-
-I want to first build a model of Italys' predicted Deaths per day, this can further help us find the actual number of confirmed cases!
-
-## Building the predicted Deaths per day
-
-There are a few things I want to note:
-
-* The reported Deaths are likely to be the most accurate.
-    + This is due to the fact that there are likely much more confirmed cases of Covid-19 than what is reported.
-        - Covid-19 is known to be transmittable by people without showing symptoms.
-        - Not everyone will be tested.
-
-* Using the Deaths rate of change, we can estimate the future Deaths to be reported.
+    SOURCES:
     
-So lets get started!
-
-### The math behind using Deaths
-
-${Deaths}={Infected}*{MortalityRate}$
-
-This is our formula to find the number of Deaths from any given population of infected individuals. We are focusing on the Deaths per day, as I want a per day model.
-
-This means we need to take the derivative of our formula, with respect to time. This leads into a two options:
-
-* The Mortality Rate is a constant value for the population.
-
-* The mortality Rate is a value that also changes with time.
-
-$D=Deaths$
-
-$I=Infected$
-
-$R=MortalityRate$
-
-If we take the derivative with Mortality Rate as a variable we get the following: 
-
-* $\frac{dD}{dt}=\frac{dI}{dt}*\frac{dD}{dI}+\frac{dR}{dt}*\frac{dD}{dR}$
-
-* $\frac{dD}{dt}=\frac{dI}{dt}*R+\frac{dR}{dt}*I$
-
-In plain terms, the change in Deaths is equal to the change in infections, time the Mortality Rate, plus, the change in Mortality Rate, times the infections.
-
-There is one major problem with this, we cannot make an accurate estimate on the Mortality Rate, which means we also cannot make an accurate estimate on the change in Mortality Rate. So, while this would be the better option, I do not believe it is feasable with the data we have now, as we cannot get an accurate Mortality Rate.
+    https://www.uptodate.com/contents/coronavirus-disease-2019-covid-19?source=history_widget
+    
+    https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(20)30566-3/fulltext
 
 
-However, taking the derivative with Mortality Rate as a constant gives us the following:
+# Building the Monte Carlo Simulation
 
-* $\frac{dD}{dt}=\frac{dI}{dt}*R$
+Now that the correlations have been tested against eachother, the process for the algorithm can begin!
 
-which also tells us..
+This algorithm will be broken down into the following steps:
 
-* $\frac{dI}{dt}=\frac{\frac{dD}{dt}}{R}$
+* Find the Cumulative Deaths.
 
-In plain terms, we get that the change in Deaths is equal to the change in the infections, times the Mortality Rate. We also know that the change in infections is equal to the change in Deaths, divided by the Mortality Rate.
+* Find the Deaths per day.
 
-This means that with a constant Mortality Rate, the change in Deaths will also be the same as the change in Infections! As the rate is just scaling the numbers. This tells us we can make predictions on the change in Infections by using the change in Deaths, scaling with the Mortality Rate afterwards!
+* Find the Rate of change of the Deaths per day.
 
+* Find the Changes in those rates.
 
-Using this information, I will build my model with Mortality Rate as a constant.
+* Predict the future change in rate,
+  + this will be done using a Markov Technique,
+    - ie, the algorithm will use the last X days for the mean and standard deviation as a basis to predict the next value
+    
+Great, now once the values are predicted, the algorithm will need to math the Change in Rates back to the next Rate of Change, then the Deaths per day, then finally the predicted Cumulative Deaths!
 
 ## The math behind the Monte Carlo Simulation
 
-$f(t)=P_0*(1+r)^t$
 
-We are calculating this one day at a time, which means our t value will be 1, giving us this:
+* $f(t,r)=P_0*(1+r)^t$
 
-$f(1)=P_0*(1+r)$
+This function is being calculated one day at a time, which means the t value will be 1, giving us this:
 
-$\frac{f(1)}{P_0}=1+r$
+* $f(1,r_1)=f(0,r_0)*(1+r_1)$
 
-$r=\frac{f(1)}{P_0}-1$
+In plain terms, the next Cumulative Death total is equal to the previous Cumulative Death total times, 1 plus the current rate.
 
-$r=\frac{\Delta f(1)}{P_0}$
+This also leads to a few other things:
 
-$s.t.f(0)=P_0$
+* $r_1=\Delta r_1+r_0$
 
-$r=\frac{f(1)-f(0)}{f(0)}$
+Meaning, current Rate is equal to the change in the current rate plus the old rate.
 
-FIXING
+* $\Delta f(1,r_1)=f(0,r_0)*r_1$
 
-$r_1-r_0=\frac{f(1)-f(0)}{P_0}$
+Using the above to get; the change in the Cumulative Deaths (deaths per day) is equal to the previous Cumulative Deaths time the current Rate.
 
-$r_1=\frac{f(1)-f(0)}{P_0}+r_0$
+* $f(1,r_1)=\Delta f(1,r_1)+f(0,r_0)$
 
-$f(1)=(r_0*P_0)-(r_1*P_0)+P_0._\square$
-
-In plain terms, the day to predict is equal to the change in our rate, times the previous day, plus the previous day. This means, if we try to predict the change in our rate, we can find our predicted Cumulative Deaths!
+Thus, the current Cumulative Death is equal to the change in the Cumulative Death plus the previous Cumualtive Death total.
 
 ## The Algorithm
 
-To start, there are a few things to note about how I built this algorithm:
 
-* I will build it using the mean and standard deviation from the past 8 days.
-  + What this means is, we will only look at the last 8 rates of change to base our next day off of.
-  + Once we predict a future rate, we throw away the oldest rate and re-model our predictions!
-    - This is to make sure that our model changes in accordance with our predictions, otherwise we would start to see a more linear aspect to our predictions.
+To start, there are a few things to note about how I built the algorithm for this analysis:
+
+* It was built using the mean and standard deviation from the past 8 days,
+  + what this means is, it will only look at the last 8 change in rates to base the next day off of.
+  + Once it predicts a future rate, the oldest rate can be thrown away, and the algorithm can re-model the predictions mean and standard deviation,
+    - this is ensure that the model changes in accordance with the predictions, otherwise there would start to be a more linear aspect to the predictions.
     
 * I have split this algorithm into multiple functions to stop at certain points, in order to explain whats going on.
 
-Lets dive in by taking a look at how our rates of change work!
+Lets dive in by taking a look at how the rates of change work!
 
-# Prediction Analysis and building
+## Pre-Prediction Analysis
 
-To start, we know how much our Deaths are changing per day, we can formulate what percentage this change is from our cumulative Deaths. To do this, we need the following formula:
+Here I will go into a more in-depth analysis of the Change in Rates, in order to prep it for the algorithm!
 
-$r=\frac{\Delta f(t)}{P_0}$
+To start, the Rate of Change can be formulated by:
 
-In plain terms, this formula takes the change per day of our deaths, and divides that by our previous days cumulative Deaths! Making the deaths per day into a percentage of our cumulative deaths!
+* $r_1=\frac{\Delta f(t,r_1)}{P_0}$
+
+In plain terms, this formula takes the change per day of the deaths, and divides that by the previous days Cumulative Deaths! Making the Deaths per day into a percentage of the Cumulative Deaths!
 
 ```{r}
 split_to_country <- function(data, country){
@@ -557,29 +714,34 @@ split_to_country <- function(data, country){
 
 italy <- raw %>% 
   split_to_country("Italy")
+
 #showing tail values
 tail(italy,5)
 ```
 
-Now that this step is complete, we can calculate the change in our death rate of change. Essentially looking at how much our rates are fluctiating over time. We can do this simply by taking our first deaths rate of change and subtracting the second days rate of change from that. This will mean if the rate goes up, the change will go up as well!
+Now that this step is complete, the change these rates can be calculated. Essentially looking at how much the rates are fluctiating over time. This can be done simply by taking the first deaths rate of change and subtracting the second days rate of change from that. This will mean if the rate goes up, then the change in that rate will go up as well!
+
+* $\Delta r= r_1-r_0$
 
 ```{r}
-get_dr_c <- function(data){
-  #Calulating the change in our rates of change
+find_dr_c <- function(data){
+  #Calulating the change in the rates of change
   data <- data %>% 
     mutate(
       D_RC_C = Deaths_RC - lag(Deaths_RC,k=1)
     )
   return (data)
-}
+}## SLIGHTLY DIFFERENT FROM BEFORE
 
 italy <- italy %>% 
-  get_dr_c()
+  find_dr_c()
 
 tail(italy,5)
 ```
 
-Great, here are Italys' cumulative Deaths, Deaths per day, Deaths rate of change, and the change in the rate of change. We will use all this information to work backwards at the end, to fill in the predictions.
+Great, here are Italys' cumulative Deaths, Deaths per day, Deaths rate of change, and the change in the rate of change. All of this information will be used to work backwards at the end, to fill in the predictions.
+
+First, lets take a look at the distribution of last 8 days' Change in Rate.
 
 ```{r}
 ##save og data!
@@ -628,78 +790,80 @@ italy <- italy %>%
 ```
 
 ```{r}
-hchart(density(italy$D_RC_C), type = "area", color = "red", name = "Rate of Deaths") %>%
+hchart(density(italy$D_RC_C), type = "area", color = "red", name = "Change in Rates") %>%
   hc_add_theme(hc_theme_flat()) %>% 
-  hc_title(text = "Distribion of the Change in Rate of Change",
+  hc_title(text = "Distribion of the Change in Rate",
            align = "left") %>% 
-  hc_subtitle(text = "For Italy",
+  hc_subtitle(text = "For Italys' Deceased Cases",
               align = "left") %>% 
   hc_yAxis(labels = list(format = "{value}")) %>% 
   hc_xAxis(labels = list(format = "{value}"),
-           title = list(text = "Change in Rate of Change of Deaths"))%>% 
+           title = list(text = "Change in the Rate of Deaths"))%>% 
   hc_legend(align = "left") %>% 
   hc_tooltip(formatter = JS("function(){
-                            return ('Rate of Change: ' + this.y)}"))
+                            return ('Change in Rate: ' + this.x)}"))
 ```
 
-This is the distribution of the rate of change, we want to take a look at this to make sure it is relatively normal, otherwise there will be a different method needed to make predictions from.
+This is the distribution of the Change in the Deaths Rate of Change, from a visual standpoint, there seems to be a slight dip at 0, suggesting that the changes skip over 0. This is a good thing, as the Change in Rate should always be changing, as long as the Cumulative Deaths are changing.
+
+Lets do another Shapiro Wilk test on this, to check its normality.
 
 ```{r}
 shapiro.test(italy$D_RC_C)
 ```
 
-Exactly what we wanted to see, our p value is > 0.05, meaning our distribution is normal enough to find the probabilities!
+Exactly what was needed, the p value is 0.2677 > 0.05, meaning the distribution is normal enough to use as a predictor!
 
-## Building the predictions
+## Building the Algorithm
 
-Now that we have the changes per day, we can build the prediction model. I will break this down into steps:
+Now that the Change in Rate has been calculated and tested, the prediction model can start to be built!
 
-* Use a changing mean and standard deviation:
-  + Think of this as a revolving door, we only want to look at the past 8 days' changes.
-  
-* Generate a random number for each day, per trial
-
-* Calculate backwards to get the Cumulative Deaths
+This process will be walked over in the code chunks, as I am building the process by hand. The overall process of the algorithm was mentioned at the start of this section.
 
 ```{r}
-### functions used inside function below
+######################
+### functions used inside prediction model function
+######################
+
+# FUNCTION for getting the rate of change
 get_rc <- function(death_rc_n1, change){
   #rc = lag death_rc + change
   rc=death_rc_n1+change
+  
+  if (rc <0){
+    rc=0
+  }
   return(rc)
 }
 
+# FUNCTION for getting the Deaths per day
 get_pd <- function(deaths_n1, deaths_rc){
   #lag death*roc = pd
   
   pd = (deaths_rc*deaths_n1)
-  if (pd <0){
-    pd = pd * -1
-  }
   
   return(ceiling(pd))
 }
 
+# FUNCTION for getting the Cumulative Deaths
 get_death <- function(lag_death = lag_death, dpd){
-  #lag death + death per dat = next cumulative death
-  if(dpd <0){
-    dpd <- dpd * -1
-  }
   
   death = lag_death+dpd
   return(ceiling(death))
 }
 
-### function used for prediction model
+### FUNCTION used for prediction model
 prediction_model <- function(data, days, trials, split, curr_d){
+  
+  #getting the current day inside the data passed
   curr_d = max(data[data$D_RC_C != 0,"Date"])
   
-  for (n in 1:trials){
-    temp <- data %>% 
+  
+  for (n in 1:trials){ #loop for num of simulations
+    temp <- data %>% #create a ned df for each sim
       subset(select = c(Date, D_RC_C))
 
-    for (i in 1:days){
-      
+    for (i in 1:days){ #loop for num of pred days
       mu <- temp %>% #grabbing mean
         subset(select = D_RC_C) %>% 
         slice(nrow(temp)-(nrow(temp)-split):nrow(temp)+i) %>% 
@@ -712,30 +876,33 @@ prediction_model <- function(data, days, trials, split, curr_d){
         as.matrix() %>% 
         sd()
       
-      set.seed(i*13*n)
-      temp <- temp %>% 
+      set.seed(i*13*n) #setting a changing seed
+      
+      temp <- temp %>%  #adding a new row to the df
         bind_rows(data.frame(Date = as.Date(curr_d, format = "%Y-%m-%d")+i, D_RC_C = rnorm(1, mu, sd))) %>% 
         mutate(
-          Trial = n
+          Trial = n #adding the trial number
         )
     }
     
-    if (n == 1){
+    if (n == 1){ #to create the new trial data
       trial_data <- temp
     }
-    else{
+    else{ #to combine the trial data
       trial_data <- temp %>% 
         bind_rows(trial_data)
     }
   }
   
-  return (trial_data)
+  return (trial_data) #FINISHED
 }
+
+#Grabbing the current day for usage
 curr_d <- max(italy[italy$D_RC_C != 0,"Date"])
 
-TRIALS <- 20
-DAYS <- 10
-SPLIT <- 8
+TRIALS <- 100 #set number of trials
+DAYS <- 10 #set number of days
+SPLIT <- 8 #set number of window
 
 italy <- italy %>% 
   prediction_model(days = DAYS, trials = TRIALS, split = SPLIT, curr_d) %>% 
@@ -750,12 +917,76 @@ italy <- italy %>%
   )
 ```
 
+```{r}
+hc<- italy %>% 
+  subset(select= c(D_RC_C, Date, Trial, Deaths)) %>% 
+  subset(Trial == 1) %>% 
+  mutate(
+    name = "Simulation"
+  ) %>% 
+  subset(Date >= curr_d) %>% 
+  hchart(type = "line", hcaes(x=Date, y=D_RC_C), name = "Simulated", color = "black")
+
+p_og <- og %>% 
+  mutate(
+    name = "Actual"
+  )
+
+hc <- hc %>% 
+  hc_add_series(data = p_og, type = "line", color = "red", hcaes(x=Date, y=D_RC_C), name= "Actual") %>% 
+  hc_xAxis(type = "datetime", dateTimeLabelFormats = list(day = '%d/%b')) %>% 
+  hc_add_theme(hc_theme_flat()) %>% 
+  hc_title(text = "Projected Change in Rates",
+           align = "left") %>% 
+  hc_subtitle(text = "#Simulations = 1, #days = 10, using last 8 days mu/sd",
+              align = "left") %>% 
+  hc_yAxis(labels = list(format = "{value}"), title = list(text = "Change in Rate of Deaths")) %>% 
+  hc_xAxis(title = list(text = "Date"),
+           plotBands = list(
+             list(
+               label = list(text = "This is the Predicted Data"),
+               color = "lightblue",
+               from = datetime_to_timestamp(as.Date(curr_d)+1),
+               to = datetime_to_timestamp(as.Date('2020-06-02'))
+             )))%>% 
+  hc_legend(align = "left") %>% 
+  hc_tooltip(formatter = JS("function(){
+                            return ('Date: ' + this.point.Date + ' <br> Change in Rate: ' + this.y +
+' <br> Deaths: ' + this.point.Deaths + ' <br> Data: ' + this.point.name)}"))
+
+
+hc
+```
+
+This graph shows just one Trial of the Change in Rates. For this test model, I ran a total of 100 simulations, so keep in mind, each individual simulation will look different.
+
+* An important note is: I put a hard cap on the Rate of Change. If the change dropped below 0, I prevented the algorithm from dropping the rate below 0.
+  + This is due to the fact that one cannot LOSE values in a cumulative sum,
+    - losing values would indicate a negative rate of change.
+    
+  + Relating this to real life, this could possibly mean a lull in the virus, or a resurgance if the changes pick back up.
+    - This is an unlikely scenario, as we are adjusting the parameters of the predictor, as the number of days increase.
+
+As shown, in the beginning of the data, where the Cumulative Deaths were still very low, the variation of those changes were very drastic, over time the Changes started to slow down, so this algorithm is looking at the last 8 days of the actual data, and keeping the revolving door moving, it should start to even out over time, converging to 0. When the Changes in the Rates converge to 0, this means that the Deaths per day are staying stagnant, presumably this will happen when the disease has done a few things:
+
+* The Rate of Deaths has stalled at some number,
+  + meaning the Rate of Death is staying at a constant rate.
+  
+* Hopefully the Rate of Death converges to 0,
+  + this would mean that COVID-19 heading toward an eventual stop.
+
+* The Rate of Deaths could converge to a steady rate,
+  + this would suggest that COVID-19 is on a steady track, either upwards or downwards.
+    
+Now that all the Changes in Rates have been predicted, lets' run the algorithm to calculate backwards to fill in the blanks!
 
 ```{r}
+# FUNCTION used to calculate the rate of change, deaths per day, and cumulative deaths
 calc_deaths <- function(data, trials, curr_d){
-  for (i in 1:trials){
-    for (d in data$Date){
+  for (i in 1:trials){ #run for num of trials
+    for (d in data$Date){ #run for num of days
       if (d > as.Date(curr_d, format = "%Y-%m-%d")){
+        
         #getting roc
         data[data$Date == d & data$Trial == i,6] <- get_rc(data[data$Date == d-1 & data$Trial == i,6], data[data$Date == d & data$Trial == i,2])
         
@@ -767,23 +998,45 @@ calc_deaths <- function(data, trials, curr_d){
       }
     }
   }
-  return (data)
+  return (data) #FINISHED
 }
 
 italy <- italy %>% 
   subset(Date >= as.Date(curr_d, format = "%Y-%m-%d"))
 
-for (d in og$Date){
+for (d in og$Date){ #fill in the known values
   italy[italy$Date == d,"Deaths"] <- og[og$Date == d,"Deaths"]
   italy[italy$Date == d,"Deaths_PD"] <- og[og$Date == d,"Deaths_PD"]
   italy[italy$Date == d,"Deaths_RC"] <- og[og$Date == d,"Deaths_RC"]
 }
 
-italy <- italy %>% 
+italy <- italy %>% #function call
   calc_deaths(TRIALS, curr_d)
+
+italy <- italy %>% 
+  mutate( #there cannot be negative rates
+    Deaths_RC = abs(Deaths_RC)
+  )
 ```
 
-## Taking a look at our predicted Deaths
+Awesome, now all the blanks are filled in marking the end of the Algorithms' job! Lets start with a quick Analaysis of these results!
+
+
+# Analysis of the Monte Carlo Algorithm
+
+It is important to note a few things about this Monte Carlo Algorithms:
+
+* They will not give exact results,
+  + this means that one can only infer what the results could mean to the situation at hand.
+  
+* This particular Algorithm uses a Markov Technique,
+  + meaning the pool of random numbers it can generate will change as it predicts more numbers,
+    - this can lead to further uncertainty in predictions far into the future.
+    
+* The Algorithms are generally most accurate when the number of simulations is large,
+  + For this initial example, I will only be using 100 trials, which is a significant number of trials to get a general estimate from.
+    - In academic research using Monte Carlo methods, it is common to use thousands of simulations.
+    
 
 ```{r}
 hc <- highchart() 
@@ -799,15 +1052,15 @@ hc <- hc %>%
 hc <- hc %>% 
   hc_xAxis(type = "datetime", dateTimeLabelFormats = list(day = '%d/%b')) %>% 
   hc_add_theme(hc_theme_flat()) %>% 
-  hc_title(text = "Italys' projected Deaths",
+  hc_title(text = "Italys' Simulated Cumulative Deaths",
            align = "left") %>% 
-  hc_subtitle(text = "#Simulations = 20, #days = 10, using last 8 days mu/sd",
+  hc_subtitle(text = "#Simulations = 100, #days = 10, using last 8 days mu/sd",
               align = "left") %>% 
   hc_yAxis(labels = list(format = "{value}"), title = list(text = "Cumulative Number of Deaths")) %>% 
   hc_xAxis(title = list(text = "Date"),
            plotBands = list(
              list(
-               label = list(text = "This is the Predicted Data"),
+               label = list(text = "This is the Simulated Data"),
                color = "lightblue",
                from = datetime_to_timestamp(as.Date(curr_d)+1),
                to = datetime_to_timestamp(as.Date('2020-06-02'))
@@ -820,13 +1073,22 @@ hc <- hc %>%
 hc
 ```
 
-As shown, these are the 20 simulations for a 10 day forecast. Lets take a deeper look.
+    Remember: You can deselect the actual data to get a closer look at the simulation runs.
+
+As shown, these are the 100 simulations for a 10 day forecast of Italys' Cumulative Deaths. There are a few things to note from this graph:
+
+* There seems to be a small clustering of simulations that heaviny exponentiated.
+
+* The majority of the simulations appears to be concentrated at a slower exponential rate.
+
+Lets take a deeper look into these numbers.
+
 
 ```{r}
 hc <- italy %>% 
   subset(Date > curr_d) %>% 
   hchart(type = "scatter", hcaes(x=Date,y=Deaths, color = Trial),
-         name = "SImulation") %>% 
+         name = "Simulation") %>% 
   hc_tooltip(formatter = JS("function(){
                             return ('Date: ' + this.point.Date + ' <br> Number of Deaths: ' + this.y + ' <br> Simulation: ' + this.point.Trial)}"))
   
@@ -835,15 +1097,15 @@ hc <- hc %>%
   hc_xAxis(type = "datetime", dateTimeLabelFormats = list(day = '%d/%b')) %>% 
   hc_add_series(name = "Actual Data", data = og[og$Date==curr_d,], type = "scatter", hcaes(x=Date, y=Deaths), color = "black") %>% 
   hc_add_theme(hc_theme_flat()) %>% 
-  hc_title(text = "Italys' projected Deaths",
+  hc_title(text = "Italys' Simulated Cumulative Deaths",
            align = "left") %>% 
-  hc_subtitle(text = "#Simulations = 20, #days = 10, using last 8 days mu/sd",
+  hc_subtitle(text = "#Simulations = 100, #days = 10, using last 8 days mu/sd",
               align = "left") %>% 
   hc_yAxis(labels = list(format = "{value}"), title = list(text = "Cumulative Number of Deaths")) %>% 
   hc_xAxis(title = list(text = "Date"),
            plotBands = list(
              list(
-               label = list(text = "This is the Predicted Data"),
+               label = list(text = "This is the Simulated Data"),
                color = "lightblue",
                from = datetime_to_timestamp(as.Date(curr_d)+1),
                to = datetime_to_timestamp(as.Date('2020-06-02'))
@@ -853,7 +1115,19 @@ hc <- hc %>%
 hc
 ```
 
-Here we can see the clustering of our Simulations. It seems the farther the forecast, the less clustered it becomes. This means that the Variance is growing as we predict the days, something that is expected as this is using a Markov Technique.
+Here the clustering of the simulations is apparant. It seems the farther the forecast, generally the less clustered it becomes. This means that the Variance is growing as the algorithm predicts each day, something that is expected as this is using a Markov Technique, as this techniquew tends to expand the extreme values more than other methods.
+
+A few notes about this graph:
+
+* The range of deaths simulated on the first day is 938 total Deaths,
+  + simulation 14 = 7201 Deaths
+  + Simulation 91 = 6077 Deaths
+  
+* The range of Deaths simulated on the tenth day is 61,545 total Deaths,
+  + simulation 96 = 69530 Deaths
+  + simulation 74 = 6225 Deaths
+  
+* As the number of predicted days increases, the variance in the Cumulative Deaths is increasing rapidly.
 
 Lets take a look at the distribution of these indivdual days!
 
@@ -862,7 +1136,7 @@ Lets take a look at the distribution of these indivdual days!
 tplotd <- italy %>% 
     subset(Date == curr_d + 1)
 
-hc <- hchart(density(tplotd$Deaths), type = "area", name = paste("Simulated Day #", as.character(1), sep=" "))
+hc <- hchart(density(tplotd$Deaths), type = "area", name = paste("Prediction Day #", as.character(1), sep=""))
 
 for (i in 2:DAYS){
   tplotd <- italy %>% 
@@ -873,7 +1147,7 @@ for (i in 2:DAYS){
     hc_add_theme(hc_theme_flat()) %>% 
   hc_title(text = "Italys' Distribution of Cumulative Deaths",
            align = "left") %>% 
-  hc_subtitle(text = "#Simulations = 20, #days = 10, using last 8 days mu/sd",
+  hc_subtitle(text = "#Simulations = 100, #days = 10, using last 8 days mu/sd",
               align = "left") %>% 
   hc_yAxis(labels = list(format = "{value}"), title = list(text = "Dristribution")) %>% 
   hc_xAxis(title = list(text = "Cumulative Deaths")) %>% 
@@ -885,19 +1159,44 @@ for (i in 2:DAYS){
 hc
 ```
 
-This shows what exactly is going on with each day that the algorithm predicts. As the number of predicted days increase, the distribution of our Cumulative Deaths flatten out. This means that there is more variation, or 'less accuracy', with each day that the algorithm predicts. This tells us that it will be more adventageous to use this algorithm as a short term predictor, rather than a long term predictor.
+    Remember: You can deselect the simulation days to get a better look at individual days, or to compare a few days.
 
-Now lets take a look our individual rates!
+This shows what exactly is going on with each day that the algorithm predicts. 
+
+* As the number of predicted days increase, the distribution of the Cumulative Deaths generally flatten out.
+    + This means that there is more variation, or 'less accuracy', with each day that the algorithm predicts. 
+      - Generally this implies it will be more adventageous to use this algorithm as a short term predictor, rather than a long term predictor.
+    + While they generally flatten out, if you look at the distributions day by day, you can actually see the Cumulative Deaths start to converge towards a set number,
+      - this is why running these Algorithms with much higher simulations is important.
+      
+* As the days increase, the distribution starts to skew and converge to a single number. This is shown by the peaks in the distributions. If the peak is very tall and has thin tails, this suggests that the rates are converging to a single number.
+  + This is exactly what is needed, as this is what was happening in real life! 
+
+Now lets take a look the individual rates!
 
 ```{r}
 hc <- italy %>% 
-  subset(Date > curr_d) %>% 
+  subset(Date >= curr_d) %>% 
   hchart(type = "scatter", hcaes(x=Date,y=Deaths_RC, color = Trial),
          name = "Simulation")
   
 val <- og %>% 
   subset(Date == curr_d, select = Deaths_RC) %>% 
   as.numeric()
+
+y=0
+n=0
+
+for (rate in italy$Deaths_RC){
+  if(rate < val){
+    y=y+1 #less than last known rate
+  }
+  else{
+    n=n+1 #greater than last known rate
+  }
+}
+
+#cat(y," ",n) #unlock to get numbers
 
 hc <- hc %>% 
   hc_xAxis(type = "datetime", dateTimeLabelFormats = list(day = '%d/%b')) %>% 
@@ -913,9 +1212,9 @@ hc <- hc %>%
   hc_add_theme(hc_theme_flat()) %>% 
   hc_title(text = "Italys' Rate of Change in Cumulative Deaths",
            align = "left") %>% 
-  hc_subtitle(text = "#Simulations = 20, #days = 10, using last 8 days mu/sd",
+  hc_subtitle(text = "#Simulations = 100, #days = 10, using last 8 days mu/sd",
               align = "left") %>% 
-  hc_yAxis(labels = list(format = "{value}"), title = list(text = "Rate of Change from Previous Day")) %>% 
+  hc_yAxis(labels = list(format = "{value}"), title = list(text = "Rate of Change of Cumulative Deaths")) %>% 
   hc_xAxis(title = list(text = "Date"),
            plotBands = list(
              list(
@@ -926,14 +1225,441 @@ hc <- hc %>%
              )))%>% 
   hc_legend(align = "left") %>% 
   hc_tooltip(formatter = JS("function(){
-                            return ('Date: ' + this.point.Date + ' <br> Rate of Change: ' + this.y + ' <br> Simulation: ' + this.point.Trial)}"))
+                            return ('Date: ' + this.point.Date + ' <br> Rate of Change: ' + this.y +
+' <br> Deaths per day: ' + this.point.Deaths_PD +
+' <br> Simulation: ' + this.point.Trial)}"))
                 
 hc
 ```
 
-Now we can see that there is a clear split between rates that are going downwards and rates that are climbing upwards! This is great news, as it can generally imply that the Rate of Change will start to climb down, suggesting that what has been going on in the past 8 days is directly effecting the rate at which Covid-19 is spreading!
+Remember, these rates of changes were hard capped to 0.
 
+* Meaning, if the rate was negative from the change, it is considered 0.
+  + The rate still has a chance to trend back upwards after hitting 0.
+
+
+Now it is obvious that there is a clear split between rates that are trending downwards and rates that are climbing upwards! This is great news, as it can generally imply that the Rate of Change will start to climb down. 
+
+* ~74.8% (823 rates < 0.109) of the rates are below the Last Known Rate of 0.109,
+    + while ~25.2% (277 rates > 0.109) of the rates are above the Last Known Rate.
+    
+This can suggest a few things:
+
+* The Rate of Change is starting to even out, suggesting that it is starting the trek downwards.
+  + As the Rate of change goes to 0, the Deaths per day will also go to 0.
+    - Meaning, that when the spread of COVID-19 stops, there should be a long trend of Rates of Changes that are 0, or very close to 0.
+    
+  + If the Rate of Change trends downwards,
+    - the change in the rate was a negative decrease,
+    - the Deaths per day is lower than the previous day,
+    - the Cumulative Deaths will still increase.
+    
+  + If the Rate of Change trends upwards,
+    - the change in rate was a positive increase,
+    - the Deaths per day is higher than the previous day,
+    - the Cumulative Deaths will still increase.
+
+* A slowing Rate of Change can suggest that what has been going on is directly effecting the rate at which COVID-19 is spreading!
+  + A slowing Rate would be rates that approach 0.
+  + One thing to note, is that the Infection day of these deaths would be 23 days prior to these dates,
+    - with the Mortality Rate set as a constant, this would mean that what was going on 31 to 23 days prior to the day of Death, is directly effecting the Rate of Infection.
+    - However, the Mortality Rate is realistically not a constant, so this can also assume that was has happened in the previous 8 days is directly effecting the current Cumulative Deaths.
+
+
+## Running different hyperparameters
+
+
+One thing that is possible with this algorithm, is changing the hyperparameters. 
+
+* The number of Simulations.
+* The number of Days Predicted.
+* The window used for the mean and standard deviation.
+
+
+I am going to import a dataset of this algorithm, that was ran with more different hyperparameters. I want to specifically limit the range to a 6 day forecast, as the Algorithm gets more inacurate with each consecutive day.
 
 ```{r}
-rm(list=setdiff(ls(), list("italy", "raw")))
+rm(list=setdiff(ls(), list("italy", "raw", "og", "curr_d")))
 ```
+
+```{r}
+files <- list.files("predictions", full.names = TRUE)
+
+pred_data <- files %>% #read in files
+  lapply(function(x){
+  read.csv(x) %>% 
+    mutate(
+      Date = as.Date(Date, "%Y-%m-%d")
+    )
+}) %>% 
+  bind_rows() %>% 
+  mutate(
+    Deaths_RC = abs(Deaths_RC)
+  )
+
+plot_data <- pred_data %>% 
+  subset(Split == c(4, 6, 8, 10, 30)) %>% 
+  subset(Date > curr_d) %>% 
+  mutate(
+    group = paste("Window:",as.character(Split),sep=" ")
+  )
+
+hc <- hcboxplot(x = plot_data$Deaths_RC, var = plot_data$Date, var2 = plot_data$group,
+          outliers = FALSE) %>% 
+  hc_add_theme(hc_theme_flat()) %>% 
+  hc_title(text = "Italys' Simulated Deaths Rate of Change",
+           align = "left") %>% 
+  hc_subtitle(text = "#Simulations = 100, #days = 6, legend = #days for mu/sd",
+              align = "left") %>% 
+  hc_yAxis(labels = list(format = "{value}"), title = list(text = "Rate of Change in Deaths, per day")) %>% 
+  hc_xAxis(title = list(text = "Date"), label = list(day = '%d/%b'))%>% 
+  hc_legend(align = "left")
+```
+
+```{r}
+hc
+```
+
+    Remember: You can deselect the the Windows in the legend, to get a closer comparison between each hyperparameter.
+
+This shows that a revolving mean and standard deviation can have completely different effects on the model, depending on what parameters are chosen. 
+
+This chart shows variation of the data, that appears to explode when anything over 10 is chosen.
+
+* This is most likely due to the fact that the rates were vastly different in the beginning stages of the spread, as the overall numbers are lower.
+    + Which suggests that there should be a focus on looking at a window that is less than 10, for better results.
+
+There is one thing I want to point out, when observing the window of 30 days, the median Rate of Change is the highest one out of all other options. This again suggests that the model should be used with a Window of less than 10.
+
+Lets take a deeper look at the simulations with windows that are less than 10 days.
+
+```{r, echo= FALSE}
+plot_data <- pred_data %>% 
+  subset(Split == c(5,6,7,8,9)) %>% 
+  subset(Date > curr_d) %>% 
+  mutate(
+    group = paste("Window:",as.character(Split),sep=" ")
+  )
+
+hc <- hcboxplot(x = plot_data$D_RC_C, var = plot_data$Date, var2 = plot_data$group,
+          outliers = FALSE) %>% 
+  hc_add_theme(hc_theme_flat()) %>% 
+  hc_title(text = "Italys' Simulated Change in Rates",
+           align = "left") %>% 
+  hc_subtitle(text = "#Simulations = 100, #days = 6, legend = #days for mu/sd",
+              align = "left") %>% 
+  hc_yAxis(labels = list(format = "{value}"), title = list(text = "Change in Rate, per day")) %>% 
+  hc_xAxis(title = list(text = "Date"), label = list(day = '%d/%b'))%>% 
+  hc_legend(align = "left")
+
+```
+
+```{r}
+hc
+```
+
+    Remember: You can deselect the the Windows in the legend, to get a closer comparison between each hyperparameter.
+
+It seems that nearly every simulation showed a median change that is negative. This would highly indicate that the Change in Deaths per day is slowing down, meaning that the Cumulative Deaths is starting to slow down!
+
+## Comparing the Simulation to Real Life
+
+lets take a look at the mean Deaths for the Trials, and compare that with the actual data that is now available for italy!
+
+```{r}
+pred_mean <- pred_data %>%
+  subset(Date > curr_d) %>% 
+  group_by(Split, Date) %>% 
+  summarise(
+    mean_D = ceiling(mean(Deaths)),
+    mean_D_RC = mean(Deaths_RC),
+    mean_D_RC_C = mean(D_RC_C),
+    sd_D = sd(Deaths),
+    sd_D_RC = sd(Deaths_RC),
+    sd_D_RC_C = sd(D_RC_C)
+      )
+files <- list.files("future_data", full.names = TRUE)
+
+new_og <- files %>% #read in files
+  lapply(function(x){
+  read.csv(x) %>% 
+    mutate(
+      Date = as.Date(Date, "%Y-%m-%d")
+    )
+}) %>% 
+  bind_rows()
+
+plot_d <- pred_mean %>% 
+  subset(Split < 10) %>% 
+  mutate(
+    group = paste("Window:",as.character(Split),sep=" ")
+  )
+
+plot_d <- new_og %>% 
+  rename(
+    mean_D = Deaths,
+    mean_D_RC = Deaths_RC,
+    mean_D_RC_C = D_RC_C
+  ) %>% 
+  mutate(
+    group = "Actual Data"
+  ) %>% 
+  bind_rows(plot_d)
+
+hc <- hchart(plot_d, "column", hcaes(x = Date, y = mean_D, group = group), color =c("red", "lightblue", "lightblue", "lightblue", "lightblue", "lightblue", "lightblue", "lightblue")) %>% 
+  hc_add_theme(hc_theme_flat()) %>% 
+  hc_title(text = "Comparison of Simulations Mean Cumulative Deaths",
+           align = "left") %>% 
+  hc_subtitle(text = "#Simulations = 100, #days = 6, legend = #days for mu/sd",
+              align = "left") %>% 
+  hc_yAxis(labels = list(format = "{value}"), title = list(text = "Mean Cumulative Deaths")) %>% 
+  hc_xAxis(title = list(text = "Date"), label = list(day = '%d/%b'))%>% 
+  hc_legend(align = "left")
+hc
+```
+
+    Remember: You can deselect the the Windows in the legend, to get a closer comparison between each hyperparameter.
+
+This chart shows the actual Cumulative deaths for March 24th - 29th, as well as the simulated values. This suggests a few things about the simulations:
+
+* The closest hyperparameter to match the actual data is the Window of 9 days. 
+  + Simulating with an error within 800 Deaths per day, on the 6th prediction day!
+    - This is an error of 7.18%
+    - $\varepsilon=\frac{Actual-Simulation}{Actual}$
+  
+* The simulations seem to overall get worse over time
+  + Again, this suggests that the model should only be used for short term predictions.
+ 
+  
+# Finding the Infected Cases
+
+There are a few things to note about the Infected Cases.
+
+${Deaths}={Infected}*{MortalityRate}$
+
+This is the formula to find the number of Deaths from any given population of infected individuals.
+
+Taking the derivative of this formula with respect to time leads into a two options:
+
+* The Mortality Rate is a constant value for the population.
+
+* The mortality Rate is a value that also changes with time.
+
+* $D=Deaths$
+
+* $I=Infected$
+
+* $R=MortalityRate$
+
+If the derivative is taken with Mortality Rate as a variable we get the following: 
+
+* $\frac{dD}{dt}=\frac{dI}{dt}*\frac{dD}{dI}+\frac{dR}{dt}*\frac{dD}{dR}$
+
+* $\frac{dD}{dt}=\frac{dI}{dt}*R+\frac{dR}{dt}*I$
+
+In plain terms, the change in Deaths is equal to the change in infections, time the Mortality Rate, plus, the change in Mortality Rate, times the infections.
+
+There is one major problem with this, there is no way to get an accurate estimate on the Mortality Rate, which means it is impossible to get an accurate estimate on the change in Mortality Rate. So, while this would be the more realistic option, I do not believe it is feasable with the data that is available, as there is no way to get an accurate Mortality Rate without individual studies.
+
+
+However, taking the derivative with Mortality Rate as a constant gives the following:
+
+* $\frac{dD}{dt}=\frac{dI}{dt}*R$
+
+which also implys.
+
+* $\frac{dI}{dt}=\frac{\frac{dD}{dt}}{R}$
+
+In plain terms, the change in Deaths is equal to the change in the infections, times the Mortality Rate. Noting that the change in infections is equal to the change in Deaths, divided by the Mortality Rate.
+
+This means that with a constant Mortality Rate, the change in Deaths will also be the same as the change in Infections! As the rate is just scaling the numbers. This means that the change in Infections can be estimated by using the change in Deaths, scaling with the Mortality Rate afterwards!
+
+While there is little chance the Mortality Rate is a constant value, taking a look at the bigger picture, it can be estimated what the Infected Cases might look like. This will not give an accurate per day representation, however it should give a more accurate picture overall.
+
+To counteract this, I will find the estimated Infected Cases using multiple Mortality Rates:
+
+* 1% - 5%
+  + These are realistic estimates, with a wide range to get a better understanding of how each Mortality Rate differs.
+* 9%
+  + Which is roughly Italys' Mortality Rate using the Deceased Cases divided by the Confirmed Cases.
+
+```{r}
+#grabbing new og data for manip
+nog <- og %>% 
+  mutate(
+    D_PD = Deaths_PD
+  ) %>% 
+  subset(select = c(Date, D_PD))
+
+#subsetting best prediction to df
+infections <- pred_data %>% 
+  subset(Split == 9) %>% 
+  group_by(Date) %>% 
+    summarise(
+      D_PD = ceiling(mean(Deaths_PD))
+    ) %>% 
+  bind_rows(nog) %>% 
+  arrange(Date)
+
+#getting min date for loop
+min_date = min(infections$Date)
+
+#loop to add dates to df
+for (i in 1:23){
+  infections <- infections %>% 
+    bind_rows(list(Date = as.Date(min_date)-i, D_PD = 0))
+}
+
+
+#lost a day somewhere
+infections[infections$Date == as.Date("2020-02-21", format = "%Y-%m-%d"), "D_PD"] <- 1
+
+#calculating infections
+infections <- infections %>% 
+  arrange(Date) %>% 
+  mutate(
+    I_PD_0.01 = ceiling(lead(D_PD, 23)/0.01),
+    I_PD_0.02 = ceiling(lead(D_PD, 23)/0.02),
+    I_PD_0.03 = ceiling(lead(D_PD, 23)/0.03),
+    I_PD_0.04 = ceiling(lead(D_PD, 23)/0.04),
+    I_PD_0.05 = ceiling(lead(D_PD, 23)/0.05),
+    I_PD_0.09 = ceiling(lead(D_PD, 23)/0.09)
+  ) %>% 
+  mutate(
+    C_D = cumsum(D_PD),
+    I_C_0.01 = cumsum(I_PD_0.01),
+    I_C_0.02 = cumsum(I_PD_0.02),
+    I_C_0.03 = cumsum(I_PD_0.03),
+    I_C_0.04 = cumsum(I_PD_0.04),
+    I_C_0.05 = cumsum(I_PD_0.05),
+    I_C_0.09 = cumsum(I_PD_0.09)
+  )
+```
+
+```{r}
+hc <- highchart()
+
+infections <- infections %>% 
+  subset(!is.na(I_PD_0.01))
+
+hc <- hc %>% 
+  hc_add_series(data = infections, type = "line", hcaes(x=Date, y=I_C_0.01), name = "Mortality Rate: 1%") %>%
+  hc_add_series(data = infections, type = "line", hcaes(x=Date, y=I_C_0.02), name = "Mortality Rate: 2%") %>%
+  hc_add_series(data = infections, type = "line", hcaes(x=Date, y=I_C_0.03), name = "Mortality Rate: 3%") %>%
+  hc_add_series(data = infections, type = "line", hcaes(x=Date, y=I_C_0.04), name = "Mortality Rate: 4%") %>%
+  hc_add_series(data = infections, type = "line", hcaes(x=Date, y=I_C_0.05), name = "Mortality Rate: 5%") %>% hc_add_series(data = infections, type = "line", hcaes(x=Date, y=I_C_0.09), name = "Mortality Rate: 9%")
+
+hc <- hc %>% 
+  hc_xAxis(type = "datetime", dateTimeLabelFormats = list(day = '%d/%b')) %>% 
+  hc_add_theme(hc_theme_flat()) %>% 
+  hc_title(text = "Italys' Estimated Total Infected Cases",
+           align = "left") %>% 
+  hc_subtitle(text = "#Simulations = 100, #days = 6, using last 9 days mu/sd (3-7-2020)",
+              align = "left") %>% 
+  hc_yAxis(labels = list(format = "{value}"), title = list(text = "Cumulative Number of Deaths")) %>% 
+  hc_legend(align = "left") %>% 
+  hc_tooltip(formatter = JS("function(){
+                            return ('Date: ' + this.point.Date + ' <br> Number of Infected: ' + this.y)}"))
+
+hc
+```
+
+    Remember: You can deselect the Mortality Rates in the legend to get a better comparison.
+    
+This graph is made using the original data from (2-22-2020 to 3-23-2020), as well as a 6 day simulation bringing the final predicted Cumulative Deaths to the date of (3-29-2020). However, the graph stops at March 7th because there is a 23 day lag on the infected cases (5 days incubation + 18 day illness onset to death). This leaves a massive unknown when dealing with the true Infected Cases, especially for any recent Dates.
+    
+Despite this, there are a few things we can gather from this:
+
+* The true Mortality Rate is a necessity to know the true Infected Cases.
+
+* Slight variations in the Mortality Rate leads to major differences in the Infected Cases,
+  + also, as the Mortality Rate rises, the Infected Cases drop.
+  
+* The Confirmed Cases are vastly different from the Infected Cases,
+  + when comparing the mortality rate of 9%, which is roughly the 'current' Mortality Rate of Italy using the Confirmed Cases and the Confirmed Deaths, we get:
+    - On March 7th, 2020 the Confirmed Cases was (5,883 Cases), while the estimated Infected Cases is (117,873 Cases).
+    - This is a difference of 111,990 Cases using the given mortality rate of ~9%.
+
+```{r}
+infections %>% 
+  summarise(
+    I_C_0.01 = (max(I_C_0.01)/60481602)*100,
+    I_C_0.02 = (max(I_C_0.02)/60481602)*100,
+    I_C_0.03 = (max(I_C_0.03)/60481602)*100,
+    I_C_0.04 = (max(I_C_0.04)/60481602)*100,
+    I_C_0.05 = (max(I_C_0.05)/60481602)*100,
+    I_C_0.09 = (max(I_C_0.09)/60481602)*100
+  ) %>% 
+  rename(
+    "1%" = I_C_0.01,
+    "2%" = I_C_0.02,
+    "3%" = I_C_0.03,
+    "4%" = I_C_0.04,
+    "5%" = I_C_0.05,
+    "9%" = I_C_0.09
+  ) %>% 
+  melt() %>% 
+  hchart(type= "bar", hcaes(x=variable, y=value)) %>% 
+  hc_add_theme(hc_theme_flat()) %>% 
+  hc_title(text = "Italys' Estimated Percent of Population Infected",
+           align = "left") %>% 
+  hc_subtitle(text = "#Simulations = 100, #days = 6, using last 9 days mu/sd (3-7-2020)",
+              align = "left") %>% 
+  hc_yAxis(labels = list(format = "{value}%"), title = list(text = "Percentage of Population Infected")) %>% 
+  hc_xAxis(labels = list(format = "{value}"), title = list(text = "Mortality Rate")) %>% 
+  hc_legend(align = "left") %>% 
+  hc_tooltip(formatter = JS("function(){
+                            return (' Percent of Population: ' + this.y.toFixed(2)+ '%')}"))
+```
+
+The above shows the percentage of estimated infected people in Italy, based on the current population of italy.
+
+* $Percent= \frac{Infections}{Population}*100$
+
+Off the bat, the percentage of the population decreases as the Mortality Rate increases. This is expected, as we used a constant Mortality Rate. However, the desparity is large.
+
+* Mortality Rate = 1%
+  + 1.75% of the population is infected
+  
+* Mortality Rate = 2%
+  + 0.88% of the population is infected
+  
+* Mortality Rate = 3%
+  + 0.58% of the population is infected
+  
+* Mortality Rate = 4%
+  + 0.44% of the population is infected
+  
+* Mortality Rate = 5%
+  + 0.35% of the population is infected
+  
+* Mortality Rate = 9%
+  + 0.19% of the population is infected
+  
+  
+These are the estimated percentages of the infected individuals in Italy as of March 7th, 2020.
+  
+# Conclusion
+
+While a Monte Carlo Algorithm is not traditionally used to predict the future, the Algorithm can be used to make informed inferences about what is to come.
+
+The Algorithm clearly showed a drop in the rate of change for the Confirmed Deaths, which could be indicitive of a few things happening:
+
+* The rate of Deaths is to decline.
+  + The rates are starting to even out, so there is less variance in the changes.
+  + The changes in the rates are trending to be negative.
+  + The rate does not seem to be trending to 0.
+
+* What Italy has been doing to prevent further deaths, has been working.
+  + This is shown by the decreasing rate of change.
+  + There could be a lag in these changes, showing that what Italy has been doing currently is effecting the simulated rates of change.
+  
+This information can be used to infer on the Infected Cases, in a few ways:
+
+* If the Deaths rate of change is going down, so should the rate of infected cases.
+  + This is especially true if the Mortality Rate is considered a constant, although it is very unlikely it is not a constant value.
+
+* Using the Deaths per day, one can estimate how many new Infected Cases occured 23 days prior.
+  + However, without knowing the true Mortality Rates, this is hard to get an accurate estimate.
+    - For example, using a high Mortality Rate of 9% lead to a difference of 122754 unknown Infected Cases, roughly 0.19% of the population.
+    - On the flip side, using a low Mortality Rate of 1% lead to the total Infected Cases being 11,576,000 total Cases, roughly 1.75% of the population, on March 7, 2020.
