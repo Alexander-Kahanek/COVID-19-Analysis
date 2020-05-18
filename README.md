@@ -2,8 +2,7 @@
 
 Welcome to my Covid-19 Analysis and prediction model!
 
-My Covid-19 Analysis includes an in-depth look at Italys' Confirmed Deaths. It also includes a complete walkthrough of how I build my Monte Carlo algorithm, in order to predict the future Death Counts! 
-* It also includes an Analysis of my model
+My Covid-19 Analysis includes an in-depth look at Italys' Confirmed Deaths. It also includes a complete walkthrough of how I build my Monte Carlo algorithm, in order to predict the future Death Counts! It also includes an Analysis of my model
 *******
 FILES
 
